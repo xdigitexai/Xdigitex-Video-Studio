@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1790682776356,
+      "tag": "0000_slippery_abomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790682928737,
+      "tag": "0001_opposite_ma_gnuci",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790683351610,
+      "tag": "0002_melodic_nicolaos",
+      "breakpoints": true
+    }
+  ]
+}
