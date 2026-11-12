@@ -1,7 +1,8 @@
 import { createPasswordReset } from "@/lib/server/accounts";
 import { contextFromRequest, guardMutation } from "@/lib/server/context";
 import { sendEmail } from "@/lib/server/email";
-import { baseUrl, errorResponse, json, readJson } from "@/lib/server/http";
+import { errorResponse, json, readJson } from "@/lib/server/http";
+import { appBaseUrl } from "@/lib/server/runtime";
 import { normalizeEmail } from "@/lib/server/util";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
     if (email) {
       const reset = await createPasswordReset(db, email);
       if (reset) {
-        const url = `${baseUrl(request)}/reset-password?token=${encodeURIComponent(reset.token)}`;
+        const url = `${appBaseUrl(env, request)}/reset-password?token=${encodeURIComponent(reset.token)}`;
         const sent = await sendEmail(
           db,
           {

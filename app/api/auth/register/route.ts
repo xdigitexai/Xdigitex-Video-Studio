@@ -2,7 +2,8 @@ import { registerAccount } from "@/lib/server/accounts";
 import { createSession } from "@/lib/server/auth";
 import { contextFromRequest, guardMutation, auditRequest } from "@/lib/server/context";
 import { sendEmail } from "@/lib/server/email";
-import { ApiError, baseUrl, errorResponse, json, readJson, clientIp, userAgent } from "@/lib/server/http";
+import { ApiError, errorResponse, json, readJson, clientIp, userAgent } from "@/lib/server/http";
+import { appBaseUrl } from "@/lib/server/runtime";
 import { publicUser, sessionCookieHeader } from "@/lib/server/session";
 import { isEmailVerificationRequired, isSignupEnabled } from "@/lib/server/settings";
 import { normalizeEmail, safeString } from "@/lib/server/util";
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
 
     let devVerificationUrl: string | undefined;
     if (verificationToken) {
-      const url = `${baseUrl(request)}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+      const url = `${appBaseUrl(env, request)}/verify-email?token=${encodeURIComponent(verificationToken)}`;
       const sent = await sendEmail(
         db,
         {

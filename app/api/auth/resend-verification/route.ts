@@ -1,7 +1,8 @@
 import { issueVerificationEmail } from "@/lib/server/accounts";
 import { auditRequest, contextFromRequest, guardMutation } from "@/lib/server/context";
 import { sendEmail } from "@/lib/server/email";
-import { baseUrl, errorResponse, json, readJson } from "@/lib/server/http";
+import { errorResponse, json, readJson } from "@/lib/server/http";
+import { appBaseUrl } from "@/lib/server/runtime";
 import { normalizeEmail } from "@/lib/server/util";
 import { findUserByEmail } from "@/lib/server/auth";
 
@@ -17,7 +18,7 @@ export async function POST(request: Request) {
     let devVerificationUrl: string | undefined;
     if (user && !user.email_verified_at) {
       const token = await issueVerificationEmail(db, user);
-      const url = `${baseUrl(request)}/verify-email?token=${encodeURIComponent(token)}`;
+      const url = `${appBaseUrl(env, request)}/verify-email?token=${encodeURIComponent(token)}`;
       const sent = await sendEmail(
         db,
         {
