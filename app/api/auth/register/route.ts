@@ -19,7 +19,11 @@ export async function POST(request: Request) {
     const body = await readJson<{ email?: string; password?: string; displayName?: string }>(request);
     const email = normalizeEmail(String(body.email ?? ""));
     const verificationRequired = await isEmailVerificationRequired(db);
-    const emailConfigured = Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
+    const emailConfigured = Boolean(
+      (env.RESEND_API_KEY && env.EMAIL_FROM) ||
+        env.EMAIL_RELAY_URL ||
+        (env.MAIL_API_URL && env.MAIL_API_KEY),
+    );
     const devMode = env.EMAIL_DEV_MODE === "true";
     if (verificationRequired && !emailConfigured && !devMode) {
       throw new ApiError(
