@@ -1,13 +1,25 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Xdigitex Video Studio",
-  description: "Create, edit, caption and export videos in one private workspace.",
+  title: {
+    default: "VideoX by Xdigitex — AI video & image generation",
+    template: "%s · VideoX",
+  },
+  description:
+    "Generate cinematic AI video and images with Runway, OpenAI, Gemini, Kling and more. Edit, caption, price and publish from one premium studio.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
   },
+  applicationName: "VideoX",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#07090c",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -17,7 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}</body>
+      <body>{children}</body>
     </html>
   );
 }
