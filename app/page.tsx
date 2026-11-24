@@ -5,7 +5,6 @@ import {
   Clapperboard,
   CreditCard,
   Film,
-  Gauge,
   Image as ImageIcon,
   Layers,
   Play,
@@ -17,6 +16,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { HeroVideo } from "@/components/hero-video";
 import { optionalPageActor } from "@/lib/server/context";
 import { dbFromRequestEnv } from "@/lib/server/runtime";
 import { listPlans, toPlanView, type PlanView } from "@/lib/server/plans";
@@ -104,25 +104,7 @@ export default async function LandingPage() {
             </div>
           </div>
 
-          <div className="hero-visual" aria-hidden="true">
-            <div className="hero-frame" />
-            <div className="hero-chip one">
-              <Sparkles size={14} style={{ color: "var(--lime)" }} /> <b>Gen-4.5</b> · 1080p
-            </div>
-            <div className="hero-chip two">
-              <Gauge size={14} style={{ color: "var(--violet)" }} /> 42s render
-            </div>
-            <div className="hero-chip three">
-              <CreditCard size={14} style={{ color: "var(--lime)" }} /> 124 credits · $1.24
-            </div>
-            <div className="hero-play">
-              <Play size={28} fill="currentColor" />
-            </div>
-            <div className="hero-caption">
-              <span>&ldquo;Golden hour over the reef&rdquo;</span>
-              <span className="badge badge-lime">READY</span>
-            </div>
-          </div>
+          <HeroVideo />
         </div>
       </section>
 

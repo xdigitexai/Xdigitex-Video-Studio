@@ -694,3 +694,30 @@ body:has(.bottom-nav) .lang-switch {
 .google-button:hover { background: #f3f4f6; }
 .google-button:active { transform: translateY(1px); }
 .google-button-icon { width: 18px; height: 18px; flex: 0 0 auto; }
+
+/* Animated hero preview. */
+.hero-visual { background: #070716; }
+.hero-visual::after { background: linear-gradient(180deg, rgba(4, 5, 10, 0) 46%, rgba(4, 5, 10, 0.72) 100%); }
+.hero-video-canvas { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; display: block; }
+.hero-frame { position: absolute; inset: 14px; z-index: 1; border-radius: 18px; border: 1px solid rgba(255, 255, 255, 0.13); background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); pointer-events: none; }
+.hero-video-top { position: absolute; z-index: 4; top: 24px; left: 26px; right: 26px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 0.12em; font-weight: 700; color: var(--soft); }
+.hero-live { display: inline-flex; align-items: center; gap: 7px; }
+.hero-live i { display: block; width: 7px; height: 7px; border-radius: 50%; background: #a3e635; box-shadow: 0 0 12px rgba(163, 230, 53, 0.9); animation: heroPulse 1.7s ease-in-out infinite; }
+.hero-time { font-variant-numeric: tabular-nums; letter-spacing: 0.06em; }
+.hero-chip.one { top: 56px; }
+.hero-chip.two { top: 112px; }
+.hero-chip.three { bottom: 104px; }
+.hero-play { position: absolute; z-index: 3; left: 50%; top: 48%; transform: translate(-50%, -50%); width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--grad-accent); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25); box-shadow: 0 0 0 14px rgba(139, 92, 246, 0.16); cursor: pointer; transition: transform 0.16s, box-shadow 0.16s; }
+.hero-play:hover { transform: translate(-50%, -50%) scale(1.06); box-shadow: 0 0 0 18px rgba(139, 92, 246, 0.18), 0 12px 40px rgba(139, 92, 246, 0.45); }
+.hero-caption { bottom: 44px; }
+.hero-timeline { position: absolute; z-index: 4; left: 26px; right: 26px; bottom: 22px; height: 3px; border-radius: 999px; background: rgba(255, 255, 255, 0.16); overflow: hidden; }
+.hero-timeline span { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--grad-accent); box-shadow: 0 0 14px rgba(139, 92, 246, 0.8); }
+@keyframes heroPulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.72); } }
+@media (max-width: 560px) {
+  .hero-video-top { left: 20px; right: 20px; top: 20px; }
+  .hero-chip.one { top: 50px; left: 20px; }
+  .hero-chip.two { top: 100px; right: 18px; }
+  .hero-chip.three { bottom: 100px; left: 20px; }
+  .hero-caption { left: 20px; right: 20px; bottom: 42px; }
+  .hero-timeline { left: 20px; right: 20px; bottom: 18px; }
+}
