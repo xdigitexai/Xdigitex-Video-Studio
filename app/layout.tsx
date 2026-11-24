@@ -4,22 +4,23 @@ import { LanguageRuntime } from "@/components/language-runtime";
 
 export const metadata: Metadata = {
   title: {
-    default: "Malaba Video AI — AI video & image generation",
-    template: "%s · Malaba Video AI",
+    default: "Malaba AI Studio — Create. Edit. Inspire.",
+    template: "%s · Malaba AI Studio",
   },
   description:
-    "Generate cinematic AI video and images with Runway, OpenAI, Gemini, Kling and more. Edit, caption, price and publish from one premium studio.",
+    "Generate cinematic AI video and images, edit them in one workspace, and export with confidence. Create. Edit. Inspire.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
+    icon: ["/favicon.png", "/favicon.ico"],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
-  applicationName: "Malaba Video AI",
+  applicationName: "Malaba AI Studio",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#07090c",
+  themeColor: "#080B2E",
   colorScheme: "dark",
 };
 

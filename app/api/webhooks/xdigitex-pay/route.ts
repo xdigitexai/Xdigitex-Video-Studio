@@ -1,11 +1,19 @@
-import { dbFromRequestEnv, runtimeEnv } from "@/lib/server/runtime";
-import { json } from "@/lib/server/http";
+import { emailAlreadySent } from "@/lib/server/email";
+import { emailConfig, trySendRenderedEmail } from "@/lib/server/email-notifications";
+import {
+  paymentFailedEmail,
+  paymentSuccessfulEmail,
+  subscriptionActivatedEmail,
+} from "@/lib/server/email-templates";
+import { getPlan } from "@/lib/server/plans";
 import { applyGatewayResult, getPayment, recordPaymentEvent } from "@/lib/server/payments/service";
 import {
   paymentGatewayConfig,
   verifyWebhookSignature,
   type GatewayPaymentStatus,
 } from "@/lib/server/payments/xdigitex";
+import { json } from "@/lib/server/http";
+import { dbFromRequestEnv, runtimeEnv } from "@/lib/server/runtime";
 
 export const dynamic = "force-dynamic";
 
@@ -105,5 +113,82 @@ export async function POST(request: Request) {
     raw: payload,
     source: "webhook",
   });
+
+  const settled = await getPayment(db, payment.id);
+  if (settled && settled.status !== "pending" && settled.status !== "processing") {
+    const user = await db.first<{ email: string; display_name: string }>(
+      `SELECT email, display_name FROM users WHERE id = ? LIMIT 1`,
+      [settled.user_id],
+    );
+    if (user) {
+      const mailConfig = emailConfig(env, request);
+      const plan = settled.plan_id ? await getPlan(db, settled.plan_id) : null;
+      const siteUrl = env.APP_URL;
+      const amount = settled.amount_minor ? settled.amount_minor / 100 : Number.isFinite(amountKes) ? amountKes : null;
+
+      if (
+        settled.status === "completed" &&
+        !(await emailAlreadySent(db, "payment_successful", settled.reference))
+      ) {
+        await trySendRenderedEmail(
+          db,
+          mailConfig,
+          user.email,
+          "payment_successful",
+          paymentSuccessfulEmail({
+            name: user.display_name,
+            amount,
+            currency: settled.currency || "KES",
+            reference: settled.reference,
+            receipt: settled.provider_receipt,
+            purpose: settled.purpose,
+            credits: settled.credits,
+            siteUrl,
+          }),
+        );
+      }
+
+      if (
+        settled.status === "completed" &&
+        plan &&
+        ["subscription", "subscription_renewal", "plan_change"].includes(settled.purpose) &&
+        !(await emailAlreadySent(db, "subscription_activated", settled.reference))
+      ) {
+        await trySendRenderedEmail(
+          db,
+          mailConfig,
+          user.email,
+          "subscription_activated",
+          subscriptionActivatedEmail({
+            name: user.display_name,
+            plan: plan.name,
+            credits: settled.credits,
+            siteUrl,
+          }),
+        );
+      }
+
+      if (
+        (settled.status === "failed" || settled.status === "cancelled") &&
+        !(await emailAlreadySent(db, "payment_failed", settled.reference))
+      ) {
+        await trySendRenderedEmail(
+          db,
+          mailConfig,
+          user.email,
+          "payment_failed",
+          paymentFailedEmail({
+            name: user.display_name,
+            amount,
+            currency: settled.currency || "KES",
+            reference: settled.reference,
+            reason: settled.failure_reason,
+            siteUrl,
+          }),
+        );
+      }
+    }
+  }
+
   return json({ ok: true });
 }

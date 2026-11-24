@@ -4,6 +4,7 @@ import { newId, now } from "./util";
 export interface EmailConfig {
   resendApiKey?: string | null;
   from?: string | null;
+  appUrl?: string | null;
   /** Xdigitex Mail HTTP API (mail.xdigitex.com/v1/emails). */
   mailApiUrl?: string | null;
   mailApiKey?: string | null;
@@ -17,7 +18,7 @@ export interface EmailInput {
   kind: string;
   subject: string;
   text: string;
-  html?: string;
+  html: string;
 }
 
 export interface EmailResult {
@@ -26,8 +27,16 @@ export interface EmailResult {
   error?: string;
 }
 
-function mailFrom(config: EmailConfig): string {
-  return config.from || "Malaba Video AI <support@malabavideoai.site>";
+const SENDER_NAME = "Malaba AI Studio";
+const DEFAULT_SENDER_ADDRESS = "noreply@malabavideoai.site";
+
+function configuredSenderAddress(config: EmailConfig): string {
+  const match = config.from?.match(/<([^>]+)>/);
+  return (match?.[1] || config.from || DEFAULT_SENDER_ADDRESS).trim() || DEFAULT_SENDER_ADDRESS;
+}
+
+export function mailFrom(config: EmailConfig): string {
+  return `${SENDER_NAME} <${configuredSenderAddress(config)}>`;
 }
 
 async function sendViaXdigitexMail(config: EmailConfig, input: EmailInput): Promise<{ id?: string; error?: string }> {
@@ -44,9 +53,10 @@ async function sendViaXdigitexMail(config: EmailConfig, input: EmailInput): Prom
     body: JSON.stringify({
       to: [input.to],
       from: mailFrom(config),
+      name: SENDER_NAME,
       subject: input.subject,
       text: input.text,
-      ...(input.html ? { html: input.html } : {}),
+      html: input.html,
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as { id?: string; error?: string; message?: string };
@@ -66,9 +76,10 @@ async function sendViaRelay(config: EmailConfig, input: EmailInput): Promise<{ i
     },
     body: JSON.stringify({
       to: input.to,
+      from: mailFrom(config),
       subject: input.subject,
       text: input.text,
-      ...(input.html ? { html: input.html } : {}),
+      html: input.html,
     }),
   });
   const payload = (await response.json().catch(() => ({}))) as { id?: string; error?: string };
@@ -81,8 +92,8 @@ async function sendViaRelay(config: EmailConfig, input: EmailInput): Promise<{ i
 /**
  * Sends transactional email through the configured transport and persists every
  * attempt in the outbox. A message is only reported delivered when the
- * transport accepted it; `devMode` exposes the verification URL instead of
- * claiming delivery.
+ * transport accepted it. Every message must include an HTML body and a plain
+ * text alternative so no event falls back to a generic backend-generated note.
  */
 export async function sendEmail(db: Db, input: EmailInput, config: EmailConfig): Promise<EmailResult> {
   const id = newId("mail");
@@ -106,11 +117,11 @@ export async function sendEmail(db: Db, input: EmailInput, config: EmailConfig):
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          from: config.from,
+          from: mailFrom(config),
           to: [recipient],
           subject: input.subject,
           text: input.text,
-          ...(input.html ? { html: input.html } : {}),
+          html: input.html,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as { id?: string; message?: string };
@@ -150,6 +161,17 @@ export async function sendEmail(db: Db, input: EmailInput, config: EmailConfig):
     }
   }
   return { id, delivered: false };
+}
+
+/** Returns true when an equivalent event has already reached the outbox. */
+export async function emailAlreadySent(db: Db, kind: string, needle: string): Promise<boolean> {
+  const row = await db.first<{ id: string }>(
+    `SELECT id FROM email_outbox
+     WHERE kind = ? AND (subject LIKE ? OR body LIKE ?)
+     ORDER BY created_at DESC LIMIT 1`,
+    [kind, `%${needle}%`, `%${needle}%`],
+  );
+  return Boolean(row);
 }
 
 export function escapeHtml(value: string): string {

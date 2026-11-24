@@ -1,6 +1,8 @@
 import type { Role, UserRow } from "@/lib/server/auth-types";
 import { createSession, isAdminRole } from "@/lib/server/auth";
 import { auditRequest, contextFromRequest } from "@/lib/server/context";
+import { emailConfig, trySendRenderedEmail } from "@/lib/server/email-notifications";
+import { newLoginEmail } from "@/lib/server/email-templates";
 import { clientIp, userAgent } from "@/lib/server/http";
 import { adminEmails } from "@/lib/server/runtime";
 import { publicUser, sessionCookieHeader } from "@/lib/server/session";
@@ -28,7 +30,7 @@ function base64UrlDecode(value: string): Uint8Array {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
   const binary = atob(padded);
   const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  for (let index = 0; index < bytes.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes;
 }
 
@@ -122,6 +124,19 @@ export async function GET(request: Request) {
       via: "mail-handoff",
       google_sub: claims.sub,
     });
+    await trySendRenderedEmail(
+      db,
+      emailConfig(env, request),
+      user.email,
+      "new_login",
+      newLoginEmail({
+        name: user.display_name,
+        ip: clientIp(request),
+        device: userAgent(request),
+        time: timestamp,
+        siteUrl: env.APP_URL,
+      }),
+    );
     const requested = safeReturn(claims.return_to);
     const destination = requested === "/dashboard" && isAdminRole(user.role) ? "/admin" : requested;
     return new Response(null, {

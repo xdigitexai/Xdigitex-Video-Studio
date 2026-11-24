@@ -1,7 +1,8 @@
 import { registerAccount } from "@/lib/server/accounts";
 import { createSession } from "@/lib/server/auth";
 import { contextFromRequest, guardMutation, auditRequest } from "@/lib/server/context";
-import { sendEmail } from "@/lib/server/email";
+import { emailConfig, trySendRenderedEmail } from "@/lib/server/email-notifications";
+import { verificationEmail, welcomeEmail } from "@/lib/server/email-templates";
 import { ApiError, errorResponse, json, readJson, clientIp, userAgent } from "@/lib/server/http";
 import { appBaseUrl } from "@/lib/server/runtime";
 import { publicUser, sessionCookieHeader } from "@/lib/server/session";
@@ -34,10 +35,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const displayName = safeString(body.displayName, 80);
     const { user, verificationToken } = await registerAccount(db, {
       email,
       password: String(body.password ?? ""),
-      displayName: safeString(body.displayName, 80),
+      displayName,
       adminEmails: (env.ADMIN_EMAILS || "")
         .split(",")
         .map((value) => value.trim().toLowerCase())
@@ -45,28 +47,27 @@ export async function POST(request: Request) {
       emailVerificationRequired: verificationRequired,
     });
 
+    const config = emailConfig(env, request);
+    const siteUrl = appBaseUrl(env, request);
     let devVerificationUrl: string | undefined;
     if (verificationToken) {
-      const url = `${appBaseUrl(env, request)}/verify-email?token=${encodeURIComponent(verificationToken)}`;
-      const sent = await sendEmail(
+      const url = `${siteUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+      const sent = await trySendRenderedEmail(
         db,
-        {
-          to: email,
-          kind: "verify_email",
-          subject: "Verify your Malaba Video AI email",
-          text: `Welcome to Malaba Video AI.\n\nVerify your email address: ${url}\n\nThis link expires in 24 hours.`,
-        },
-        {
-          resendApiKey: env.RESEND_API_KEY,
-          from: env.EMAIL_FROM,
-          mailApiUrl: env.MAIL_API_URL,
-          mailApiKey: env.MAIL_API_KEY,
-          relayUrl: env.EMAIL_RELAY_URL,
-          relaySecret: env.EMAIL_RELAY_SECRET,
-        },
+        config,
+        email,
+        "verify_email",
+        verificationEmail({ name: displayName, url, siteUrl }),
       );
-      if (devMode && !sent.delivered) devVerificationUrl = url;
+      if (devMode && !sent?.delivered) devVerificationUrl = url;
     }
+    await trySendRenderedEmail(
+      db,
+      config,
+      email,
+      "welcome",
+      welcomeEmail({ name: displayName || user.display_name, siteUrl }),
+    );
 
     await auditRequest(db, request, { user, via: "session" }, "auth.register", "user", user.id, {
       email: user.email,

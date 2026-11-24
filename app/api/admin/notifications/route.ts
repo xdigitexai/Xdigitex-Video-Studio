@@ -1,9 +1,9 @@
 import { findUserByEmail } from "@/lib/server/auth";
 import type { UserRow } from "@/lib/server/auth-types";
 import { auditRequest, guardMutation, requireAdmin } from "@/lib/server/context";
-import { sendEmail } from "@/lib/server/email";
+import { emailConfig, sendRenderedEmail } from "@/lib/server/email-notifications";
+import { adminNotificationEmail } from "@/lib/server/email-templates";
 import { ApiError, errorResponse, json, readJson } from "@/lib/server/http";
-import { appBaseUrl, type RuntimeEnv } from "@/lib/server/runtime";
 import { isValidEmail, normalizeEmail, safeString } from "@/lib/server/util";
 
 export const dynamic = "force-dynamic";
@@ -23,17 +23,6 @@ interface NotificationBody {
   category?: string;
   subject?: string;
   message?: string;
-}
-
-function emailConfig(env: RuntimeEnv) {
-  return {
-    resendApiKey: env.RESEND_API_KEY,
-    from: env.EMAIL_FROM,
-    mailApiUrl: env.MAIL_API_URL,
-    mailApiKey: env.MAIL_API_KEY,
-    relayUrl: env.EMAIL_RELAY_URL,
-    relaySecret: env.EMAIL_RELAY_SECRET,
-  };
 }
 
 export async function GET(request: Request) {
@@ -80,14 +69,15 @@ export async function POST(request: Request) {
     }
     if (!user) throw new ApiError(404, "Customer not found.", "USER_NOT_FOUND");
 
-    const subject = safeString(body.subject, 140) || `${LABELS[category]} from Malaba Video AI`;
-    const greeting = user.display_name ? `Hello ${user.display_name},` : "Hello,";
-    const text = `${greeting}\n\n${message}\n\n— Malaba Video AI\n${appBaseUrl(env)}`;
-    const result = await sendEmail(
-      db,
-      { to: user.email, kind: `admin_${category}`, subject, text },
-      emailConfig(env),
-    );
+    const subject = safeString(body.subject, 140) || `${LABELS[category]} from Malaba AI Studio`;
+    const rendered = adminNotificationEmail({
+      category,
+      subject,
+      message,
+      name: user.display_name,
+      siteUrl: env.APP_URL,
+    });
+    const result = await sendRenderedEmail(db, emailConfig(env, request), user.email, `admin_${category}`, rendered);
 
     await auditRequest(db, request, actor, "admin.notification_sent", "user", user.id, {
       category,

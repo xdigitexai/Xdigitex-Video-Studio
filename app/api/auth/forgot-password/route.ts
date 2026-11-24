@@ -1,6 +1,7 @@
 import { createPasswordReset } from "@/lib/server/accounts";
 import { contextFromRequest, guardMutation } from "@/lib/server/context";
-import { sendEmail } from "@/lib/server/email";
+import { emailConfig, trySendRenderedEmail } from "@/lib/server/email-notifications";
+import { resetPasswordEmail } from "@/lib/server/email-templates";
 import { errorResponse, json, readJson } from "@/lib/server/http";
 import { appBaseUrl } from "@/lib/server/runtime";
 import { normalizeEmail } from "@/lib/server/util";
@@ -17,25 +18,16 @@ export async function POST(request: Request) {
     if (email) {
       const reset = await createPasswordReset(db, email);
       if (reset) {
-        const url = `${appBaseUrl(env, request)}/reset-password?token=${encodeURIComponent(reset.token)}`;
-        const sent = await sendEmail(
+        const siteUrl = appBaseUrl(env, request);
+        const url = `${siteUrl}/reset-password?token=${encodeURIComponent(reset.token)}`;
+        const sent = await trySendRenderedEmail(
           db,
-          {
-            to: reset.user.email,
-            kind: "reset_password",
-            subject: "Reset your Malaba Video AI password",
-            text: `Reset your password: ${url}\n\nThis link expires in 60 minutes. If you did not request this, ignore this email.`,
-          },
-          {
-          resendApiKey: env.RESEND_API_KEY,
-          from: env.EMAIL_FROM,
-          mailApiUrl: env.MAIL_API_URL,
-          mailApiKey: env.MAIL_API_KEY,
-          relayUrl: env.EMAIL_RELAY_URL,
-          relaySecret: env.EMAIL_RELAY_SECRET,
-        },
+          emailConfig(env, request),
+          reset.user.email,
+          "reset_password",
+          resetPasswordEmail({ name: reset.user.display_name, url, siteUrl }),
         );
-        if (env.EMAIL_DEV_MODE === "true" && !sent.delivered) devResetUrl = url;
+        if (env.EMAIL_DEV_MODE === "true" && !sent?.delivered) devResetUrl = url;
       }
     }
     return json({

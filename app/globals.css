@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   Malaba Video AI — aurora design system
+   Malaba AI Studio — aurora design system
    Deep indigo canvas, electric violet → cyan accents, glass surfaces.
    Every layout is composed from these tokens; class names are stable so the
    entire product restyles from this one file.
@@ -721,3 +721,8 @@ body:has(.bottom-nav) .lang-switch {
   .hero-caption { left: 20px; right: 20px; bottom: 42px; }
   .hero-timeline { left: 20px; right: 20px; bottom: 18px; }
 }
+
+
+/* Malaba AI Studio supplied brand mark. */
+.brand-mark { background: #080B2E; }
+.brand-mark-img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 9px; }

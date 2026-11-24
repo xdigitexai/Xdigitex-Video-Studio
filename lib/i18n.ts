@@ -11,7 +11,7 @@ type TranslateLang = Exclude<Language, "en">;
 
 const DICTIONARIES: Record<TranslateLang, Dictionary> = {
   fr: {
-  "%s · Malaba Video AI": "%s · Malaba Video AI",
+  "%s · Malaba AI Studio": "%s · Malaba AI Studio",
   ",\n  type: string,\n  detail: Record": ",\n  ",
   ", ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL,": ", ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL,",
   ", displayName:": ", displayName :",
@@ -771,7 +771,7 @@ const DICTIONARIES: Record<TranslateLang, Dictionary> = {
   "Video playback failed during caption capture.": "La lecture vidéo a échoué lors de la capture des sous-titres.",
   "Video renderer is unavailable in this browser.": "Le moteur de rendu vidéo n'est pas disponible dans ce navigateur.",
   "Video to video": "Vidéo à vidéo",
-  "Malaba Video AI — AI video & image generation": "Malaba Video AI — Génération de vidéos et d'images IA",
+  "Malaba AI Studio — AI video & image generation": "Malaba AI Studio — Génération de vidéos et d'images IA",
   "Videos": "Vidéos",
   "Videos this period": "Vidéos cette période",
   "View all": "Voir tout",
@@ -961,7 +961,7 @@ const DICTIONARIES: Record<TranslateLang, Dictionary> = {
   "No customers found.": "Aucun client trouvé.",
 },
   sw: {
-  "%s · Malaba Video AI": "%s · Malaba Video AI",
+  "%s · Malaba AI Studio": "%s · Malaba AI Studio",
   ",\n  type: string,\n  detail: Record": ",\n  ",
   ", ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL,": ", ?, ?, ?, ?, NULL, NULL, ?, ?, ?,",
   ", displayName:": ", displayName:",
@@ -1721,7 +1721,7 @@ const DICTIONARIES: Record<TranslateLang, Dictionary> = {
   "Video playback failed during caption capture.": "Uchezaji wa video haukufaulu wakati wa kunasa manukuu.",
   "Video renderer is unavailable in this browser.": "Kionyeshi cha video hakipatikani katika kivinjari hiki.",
   "Video to video": "Video hadi video",
-  "Malaba Video AI — AI video & image generation": "Malaba Video AI - Video ya AI na utengenezaji wa picha",
+  "Malaba AI Studio — AI video & image generation": "Malaba AI Studio - Video ya AI na utengenezaji wa picha",
   "Videos": "Video",
   "Videos this period": "Video kipindi hiki",
   "View all": "Tazama zote",
