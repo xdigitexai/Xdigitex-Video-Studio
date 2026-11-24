@@ -726,3 +726,10 @@ body:has(.bottom-nav) .lang-switch {
 /* Malaba AI Studio supplied brand mark. */
 .brand-mark { background: #080B2E; }
 .brand-mark-img { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 9px; }
+
+/* Supplied Malaba AI Studio full logo. */
+.brand-logo-img { display: block; width: 210px; max-width: 100%; height: auto; }
+.sidebar-brand .brand-mark, .sidebar-brand .brand-copy { display: none; }
+.sidebar .brand-logo-img { display: none; }
+.sidebar .brand-mark { display: grid; }
+@media (max-width: 560px) { .brand-logo-img { width: 176px; } }

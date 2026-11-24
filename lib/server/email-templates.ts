@@ -2,7 +2,7 @@ export const EMAIL_BRAND = {
   name: "Malaba AI Studio",
   tagline: "Create. Edit. Inspire.",
   siteUrl: "https://malabavideoai.site",
-  logoUrl: "https://malabavideoai.site/brand/malaba-ai-studio-logo.jpg",
+  logoUrl: "https://malabavideoai.site/brand/malaba-ai-studio-logo-transparent.png",
   markUrl: "https://malabavideoai.site/brand/favicon.png",
   supportEmail: "support@malabavideoai.site",
   colors: {

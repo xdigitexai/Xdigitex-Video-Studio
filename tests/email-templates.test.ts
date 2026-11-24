@@ -56,7 +56,7 @@ test("every transactional template renders branded HTML and plain text", () => {
     assert.ok(template.text.includes("Malaba AI Studio"), "plain text includes the brand");
     assert.ok(template.html.includes("Malaba AI Studio"), "HTML includes the brand");
     assert.ok(template.html.includes("Create. Edit. Inspire."), "HTML includes the tagline");
-    assert.ok(template.html.includes("malaba-ai-studio-logo.jpg"), "HTML includes the hosted logo");
+    assert.ok(template.html.includes("malaba-ai-studio-logo-transparent.png"), "HTML includes the hosted logo");
     assert.ok(!template.html.includes("@media"), "HTML has no embedded CSS that the relay would expose as text");
     assert.ok(!template.html.includes("<style"), "HTML has no style blocks");
     assert.ok(!template.html.includes("<title"), "HTML has no duplicated title text");

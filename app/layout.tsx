@@ -10,9 +10,13 @@ export const metadata: Metadata = {
   description:
     "Generate cinematic AI video and images, edit them in one workspace, and export with confidence. Create. Edit. Inspire.",
   icons: {
-    icon: ["/favicon.png", "/favicon.ico"],
-    shortcut: "/favicon.ico",
-    apple: "/apple-touch-icon.png",
+    icon: [
+      "/favicon.svg?v=2",
+      "/favicon.png?v=2",
+      "/favicon.ico?v=2",
+    ],
+    shortcut: "/favicon.ico?v=2",
+    apple: "/apple-touch-icon.png?v=2",
   },
   applicationName: "Malaba AI Studio",
 };
