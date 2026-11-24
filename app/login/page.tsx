@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LoaderCircle, LogIn } from "lucide-react";
 import { AuthShell } from "@/components/auth-shell";
+import { GoogleSignIn } from "@/components/google-sign-in";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -125,6 +126,8 @@ export default function LoginPage() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
+      <div className="auth-divider"><span>Or continue with</span></div>
+      <GoogleSignIn next={next} explicitNext />
     </AuthShell>
   );
 }

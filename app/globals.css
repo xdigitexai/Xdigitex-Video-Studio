@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   Xdigitex VideoX — aurora design system
+   Malaba Video AI — aurora design system
    Deep indigo canvas, electric violet → cyan accents, glass surfaces.
    Every layout is composed from these tokens; class names are stable so the
    entire product restyles from this one file.
@@ -277,11 +277,13 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-s
 
 /* ---------- Landing ---------- */
 .landing { min-height: 100dvh; overflow-x: hidden; }
-.landing-nav { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 18px; padding: 16px clamp(18px, 5vw, 64px); border-bottom: 1px solid rgba(30, 34, 64, 0.7); background: rgba(5, 6, 14, 0.78); backdrop-filter: blur(16px); }
+.landing-nav { position: sticky; top: 0; z-index: 40; display: flex; align-items: center; flex-wrap: wrap; gap: 18px; row-gap: 10px; padding: 16px clamp(18px, 5vw, 64px); border-bottom: 1px solid rgba(30, 34, 64, 0.7); background: rgba(5, 6, 14, 0.78); backdrop-filter: blur(16px); }
 .landing-nav-links { display: flex; gap: 22px; margin-left: 18px; }
 .landing-nav-links a { font-size: 13px; color: var(--muted); font-weight: 500; }
 .landing-nav-links a:hover { color: var(--text); }
-.landing-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.landing-actions { margin-left: auto; display: flex; gap: 10px; align-items: center; justify-content: flex-end; flex-wrap: wrap; max-width: 100%; }
+.landing-actions .btn { flex: 0 0 auto; min-width: 96px; }
+.landing-actions .btn-primary { min-width: 144px; }
 .hero { position: relative; padding: clamp(54px, 9vw, 112px) clamp(18px, 5vw, 64px) clamp(46px, 7vw, 80px); max-width: 1240px; margin: 0 auto; }
 .hero::before { content: ""; position: absolute; inset: -20% -10% auto; height: 540px; background: radial-gradient(closest-side, rgba(139, 92, 246, 0.2), rgba(34, 211, 238, 0.06), transparent); filter: blur(40px); pointer-events: none; }
 .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(28px, 5vw, 64px); align-items: center; }
@@ -540,6 +542,8 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-s
   .admin-filter .field { min-width: 100%; }
   .table-scroll-hint { display: block; }
   .landing-nav-links { display: none; }
+  .landing-actions { width: 100%; margin-left: 0; justify-content: flex-start; }
+  .landing-actions .btn { flex: 0 1 144px; min-width: 0; }
   .quick-actions { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
@@ -562,3 +566,131 @@ table.data .num { text-align: right; font-variant-numeric: tabular-nums; white-s
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
+
+
+/* Google sign-in divider and button container. */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  color: var(--muted, #8b91a1);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line, rgba(255, 255, 255, 0.12));
+}
+.google-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.google-signin-button {
+  display: flex;
+  justify-content: center;
+  min-height: 44px;
+}
+.google-signin-button > div {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+
+/* Language switcher ??? kept outside translated content on purpose. */
+.lang-switch {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.12));
+  background: rgba(9, 11, 18, 0.92);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(14px);
+  font-size: 11px;
+  line-height: 1;
+}
+.lang-switch-label {
+  padding: 0 3px;
+  color: var(--muted, #8b91a1);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lang-switch-options {
+  display: flex;
+  gap: 3px;
+}
+.lang-switch button {
+  min-width: 30px;
+  padding: 6px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted, #8b91a1);
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.lang-switch button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+.lang-switch button[aria-pressed="true"] {
+  color: #08100a;
+  background: var(--lime, #c7f464);
+}
+body:has(.bottom-nav) .lang-switch {
+  bottom: 76px;
+}
+@media (max-width: 560px) {
+  .lang-switch {
+    right: 10px;
+    bottom: 10px;
+  }
+  .lang-switch-label {
+    display: none;
+  }
+  body:has(.bottom-nav) .lang-switch {
+    bottom: 72px;
+  }
+}
+
+
+
+/* Custom Google sign-in button (works without registering a separate JS origin). */
+.google-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--line, rgba(255, 255, 255, 0.16));
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2328;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.google-button:hover { background: #f3f4f6; }
+.google-button:active { transform: translateY(1px); }
+.google-button-icon { width: 18px; height: 18px; flex: 0 0 auto; }

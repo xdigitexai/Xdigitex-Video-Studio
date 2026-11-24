@@ -1,10 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { LanguageRuntime } from "@/components/language-runtime";
 
 export const metadata: Metadata = {
   title: {
-    default: "VideoX by Xdigitex — AI video & image generation",
-    template: "%s · VideoX",
+    default: "Malaba Video AI — AI video & image generation",
+    template: "%s · Malaba Video AI",
   },
   description:
     "Generate cinematic AI video and images with Runway, OpenAI, Gemini, Kling and more. Edit, caption, price and publish from one premium studio.",
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
   },
-  applicationName: "VideoX",
+  applicationName: "Malaba Video AI",
 };
 
 export const viewport: Viewport = {
@@ -28,8 +29,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="fr">
+      <body><LanguageRuntime>{children}</LanguageRuntime></body>
     </html>
   );
 }

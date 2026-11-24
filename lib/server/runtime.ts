@@ -8,6 +8,8 @@ export interface RuntimeEnv {
   OPENAI_API_KEY?: string;
   GEMINI_API_KEY?: string;
   GOOGLE_API_KEY?: string;
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  VIDEOX_GOOGLE_HANDOFF_SECRET?: string;
   ANTHROPIC_API_KEY?: string;
   DEEPSEEK_API_KEY?: string;
   REPLICATE_API_TOKEN?: string;

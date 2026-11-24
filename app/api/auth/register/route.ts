@@ -53,8 +53,8 @@ export async function POST(request: Request) {
         {
           to: email,
           kind: "verify_email",
-          subject: "Verify your Xdigitex Studio email",
-          text: `Welcome to Xdigitex Video Studio.\n\nVerify your email address: ${url}\n\nThis link expires in 24 hours.`,
+          subject: "Verify your Malaba Video AI email",
+          text: `Welcome to Malaba Video AI.\n\nVerify your email address: ${url}\n\nThis link expires in 24 hours.`,
         },
         {
           resendApiKey: env.RESEND_API_KEY,

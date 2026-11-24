@@ -23,7 +23,7 @@ export async function POST(request: Request) {
           {
             to: reset.user.email,
             kind: "reset_password",
-            subject: "Reset your Xdigitex Studio password",
+            subject: "Reset your Malaba Video AI password",
             text: `Reset your password: ${url}\n\nThis link expires in 60 minutes. If you did not request this, ignore this email.`,
           },
           {

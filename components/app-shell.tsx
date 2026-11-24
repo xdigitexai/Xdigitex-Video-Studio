@@ -15,6 +15,7 @@ import {
   Layers,
   LayoutDashboard,
   LogOut,
+  Mail,
   Menu,
   Receipt,
   Settings,
@@ -52,6 +53,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/models", label: "Models & pricing", icon: Sparkles, key: "admin-models" },
   { href: "/admin/pricing", label: "Margins", icon: BarChart3, key: "admin-pricing" },
   { href: "/admin/payments", label: "Payments", icon: Receipt, key: "admin-payments" },
+  { href: "/admin/notifications", label: "Email notifications", icon: Mail, key: "admin-notifications" },
   { href: "/admin/audit", label: "Audit log", icon: ShieldCheck, key: "admin-audit" },
 ];
 

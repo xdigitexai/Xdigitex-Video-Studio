@@ -27,7 +27,7 @@ export interface EmailResult {
 }
 
 function mailFrom(config: EmailConfig): string {
-  return config.from || "VideoX <onboarding@xdigitex.com>";
+  return config.from || "Malaba Video AI <support@malabavideoai.site>";
 }
 
 async function sendViaXdigitexMail(config: EmailConfig, input: EmailInput): Promise<{ id?: string; error?: string }> {

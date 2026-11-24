@@ -24,7 +24,7 @@ export async function POST(request: Request) {
         {
           to: user.email,
           kind: "verify_email",
-          subject: "Verify your Xdigitex Studio email",
+          subject: "Verify your Malaba Video AI email",
           text: `Verify your email address: ${url}\n\nThis link expires in 24 hours.`,
         },
         {
