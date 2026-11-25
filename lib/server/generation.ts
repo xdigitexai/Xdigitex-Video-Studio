@@ -430,10 +430,11 @@ export async function createGeneration(
 
   const idempotencyKey = input.idempotencyKey ? safeString(input.idempotencyKey, 120) : null;
   if (idempotencyKey) {
-    const existing = await db.first<GenerationRow>(`SELECT * FROM generations WHERE idempotency_key = ? LIMIT 1`, [
-      idempotencyKey,
-    ]);
-    if (existing && existing.owner_id === userId) {
+    const existing = await db.first<GenerationRow>(
+      `SELECT * FROM generations WHERE idempotency_key = ? AND owner_id = ? LIMIT 1`,
+      [idempotencyKey, userId],
+    );
+    if (existing) {
       return { generation: await generationView(db, existing), reused: true };
     }
   }
