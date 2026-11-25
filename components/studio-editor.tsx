@@ -133,6 +133,9 @@ const CAPABILITY_LABEL: Record<string, string> = {
   prompt_enhance: "Improve prompt",
 };
 
+const modelLabel = (index: number) => `Model ${index + 1}`;
+const generationLabel = (capability: string) => CAPABILITY_LABEL[capability] ?? "Generation";
+
 export function StudioEditor({
   initialProject,
   initialAssets,
@@ -1139,7 +1142,7 @@ export function StudioEditor({
                 <label className="label">AI model</label>
                 <div style={{ maxHeight: 222, overflowY: "auto" }}>
                   {capabilityModels.length ? (
-                    capabilityModels.map((model) => (
+                    capabilityModels.map((model, index) => (
                       <button
                         key={model.id}
                         type="button"
@@ -1153,7 +1156,7 @@ export function StudioEditor({
                       >
                         <span className="model-radio" />
                         <span style={{ minWidth: 0 }}>
-                          <b>{model.name}</b>
+                          <b>{modelLabel(index)}</b>
                           <span>{CAPABILITY_LABEL[action]}</span>
                           {!model.planAllowed ? <span className="badge badge-warn" style={{ marginTop: 5 }}><Lock size={10} /> Upgrade required</span> : null}
                         </span>
@@ -1231,7 +1234,7 @@ export function StudioEditor({
                   <div className="row" style={{ gap: 9 }}>
                     <LoaderCircle className="spin" size={15} style={{ color: "var(--lime)" }} />
                     <div style={{ flex: 1 }}>
-                      <b className="small">{activeGeneration.modelName ?? "Generation"} · {activeGeneration.status.toLowerCase()}</b>
+                      <b className="small">{generationLabel(activeGeneration.capability)} · {activeGeneration.status.toLowerCase()}</b>
                       <div className="tiny muted">
                         {activeGeneration.creditsReserved} credits reserved · survives page refresh
                       </div>
@@ -1382,7 +1385,7 @@ export function StudioEditor({
               <div className="mt-1">
                 {generations.slice(0, 5).map((job) => (
                   <div className="row-between" key={job.id} style={{ padding: "7px 0", borderBottom: "1px solid var(--line)" }}>
-                    <span className="tiny truncate" style={{ maxWidth: 170 }}>{job.modelName ?? job.capability}</span>
+                    <span className="tiny truncate" style={{ maxWidth: 170 }}>{generationLabel(job.capability)}</span>
                     <span className={`badge ${job.status === "SUCCEEDED" ? "badge-ok" : job.status === "FAILED" ? "badge-danger" : "badge-warn"}`}>
                       {job.status.toLowerCase()}
                     </span>
