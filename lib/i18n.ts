@@ -2100,121 +2100,21 @@ export function translateText(text: string, lang: Language): string {
   return output === text ? text : output;
 }
 
-type Entry = { original: string; applied: string };
 
-const textStates = new Map<Text, Entry>();
-const attrStates = new Map<Element, Map<string, Entry>>();
-const WATCHED_ATTRIBUTES = ["placeholder", "title", "aria-label", "alt"] as const;
-const SKIP_SELECTOR = ".lang-switch, script, style, noscript, textarea, [contenteditable='true']";
-
-let activeLanguage: Language = "fr";
-let mutationObserver: MutationObserver | null = null;
-
-function restoreOriginals(): void {
-  for (const [node, entry] of textStates) {
-    if (node.isConnected && node.nodeValue !== entry.original) node.nodeValue = entry.original;
-  }
-  textStates.clear();
-
-  for (const [element, attributes] of attrStates) {
-    for (const [name, entry] of attributes) {
-      if (element.getAttribute(name) !== entry.original) element.setAttribute(name, entry.original);
-    }
-  }
-  attrStates.clear();
-}
-
-function translateTextNode(node: Text, lang: TranslateLang): void {
-  const parent = node.parentElement;
-  if (!parent || parent.closest(SKIP_SELECTOR)) return;
-
-  const value = node.nodeValue;
-  if (!value || !value.trim()) return;
-
-  const state = textStates.get(node);
-  if (state && state.applied === value) return;
-
-  const translated = translateText(value, lang);
-  if (translated !== value) {
-    textStates.set(node, { original: value, applied: translated });
-    node.nodeValue = translated;
-  } else {
-    textStates.set(node, { original: value, applied: value });
-  }
-}
-
-function translateAttributes(element: Element, lang: TranslateLang): void {
-  for (const name of WATCHED_ATTRIBUTES) {
-    const value = element.getAttribute(name);
-    if (!value || !value.trim()) continue;
-
-    let byAttribute = attrStates.get(element);
-    if (!byAttribute) {
-      byAttribute = new Map<string, Entry>();
-      attrStates.set(element, byAttribute);
-    }
-
-    const state = byAttribute.get(name);
-    if (state && state.applied === value) continue;
-
-    const translated = translateText(value, lang);
-    if (translated !== value) {
-      byAttribute.set(name, { original: value, applied: translated });
-      element.setAttribute(name, translated);
-    } else {
-      byAttribute.set(name, { original: value, applied: value });
-    }
-  }
-}
-
-export function applyLanguage(lang: Language = activeLanguage): void {
-  if (lang !== activeLanguage) {
-    setDocumentLanguage(lang);
-    return;
-  }
-  if (lang === "en" || typeof document === "undefined") return;
-
-  const root = document.body;
-  if (!root) return;
-
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  let current: Node | null;
-  while ((current = walker.nextNode())) {
-    if (current.nodeType === Node.TEXT_NODE) translateTextNode(current as Text, lang);
-  }
-
-  const elements = root.querySelectorAll("*");
-  for (let i = 0; i < elements.length; i += 1) translateAttributes(elements[i], lang);
-}
-
+/**
+ * Translation is pure and React-owned from here on.
+ *
+ * The previous implementation walked and MUTATED every text node in the
+ * document on an interval and from a MutationObserver. That fought React's
+ * reconciler during App Router/RSC navigation and starved the main thread,
+ * which left pages looking blank. Strings are now translated at render time
+ * through the LanguageRuntime context instead of by touching the DOM.
+ */
 export function setDocumentLanguage(lang: Language): void {
-  if (lang === activeLanguage) return;
-  restoreOriginals();
-  activeLanguage = lang;
-  if (typeof document !== "undefined") document.documentElement.lang = lang;
-  if (lang !== "en") applyLanguage(lang);
+  if (typeof document === "undefined") return;
+  document.documentElement.lang = lang;
 }
 
-export function startLanguageObserver(): () => void {
-  if (typeof window === "undefined" || typeof MutationObserver === "undefined") return () => undefined;
-  if (mutationObserver) return () => undefined;
-
-  mutationObserver = new MutationObserver(() => applyLanguage());
-  mutationObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    characterData: true,
-    attributes: true,
-    attributeFilter: [...WATCHED_ATTRIBUTES],
-  });
-
-  const timer = window.setInterval(() => applyLanguage(), 2000);
-
-  return () => {
-    if (mutationObserver) {
-      mutationObserver.disconnect();
-      mutationObserver = null;
-    }
-    window.clearInterval(timer);
-  };
+export function languageLabel(lang: Language): string {
+  return LANGUAGES.find((item) => item.code === lang)?.name ?? lang;
 }

@@ -1,17 +1,11 @@
-/* eslint-disable @next/next/no-img-element -- media streams from the authenticated /api/assets route */
 import Link from "next/link";
-import { Download, Film, FolderOpen, Image as ImageIcon } from "lucide-react";
+import { Film, FolderOpen } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { MediaLibrary, type MediaItem } from "@/components/media-library";
 import { loadFrame, shellUser } from "@/lib/server/frame";
 import { listUserMedia } from "@/lib/server/projects";
-import { relativeTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
-
-function sizeLabel(bytes: number): string {
-  if (bytes > 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
 
 export default async function LibraryPage() {
   const frame = await loadFrame("/library");
@@ -43,50 +37,13 @@ export default async function LibraryPage() {
         </div>
       </div>
 
-      {media.length ? (
-        <div className="media-grid">
-          {media.map((item) => {
-            const isImage = item.contentType.startsWith("image/");
-            return (
-              <article className="media-tile" key={item.id}>
-                <div className="media-preview">
-                  {isImage ? (
-                    <img src={`/api/assets/${item.id}`} alt={item.fileName} loading="lazy" />
-                  ) : (
-                    <video src={`/api/assets/${item.id}#t=0.2`} muted preload="metadata" playsInline />
-                  )}
-                </div>
-                <div className="media-info">
-                  <b title={item.fileName}>{item.fileName}</b>
-                  <div className="row-between">
-                    <span className="row" style={{ gap: 5 }}>
-                      {isImage ? <ImageIcon size={11} /> : <Film size={11} />}
-                      {sizeLabel(item.byteSize)} · {relativeTime(item.createdAt)}
-                    </span>
-                    <a
-                      href={`/api/assets/${item.id}?download=1`}
-                      className="btn btn-ghost btn-sm"
-                      aria-label={`Download ${item.fileName}`}
-                    >
-                      <Download size={13} />
-                    </a>
-                  </div>
-                  <Link href={`/studio/${item.projectId}`} className="tiny" style={{ color: "var(--lime)", display: "block", marginTop: 5 }}>
-                    {item.projectName}
-                  </Link>
-                </div>
-              </article>
-            );
-          })}
+      <MediaLibrary items={media as MediaItem[]} />
+
+      {!media.length ? (
+        <div className="hint mt-3 row" style={{ gap: 7 }}>
+          <Film size={13} /> Media appears here after you upload or generate it inside a project.
         </div>
-      ) : (
-        <div className="empty">
-          <div className="empty-icon"><Film size={22} /></div>
-          <strong>No media yet</strong>
-          <p>Upload footage in a project or generate your first image or clip.</p>
-          <Link href="/studio" className="btn btn-primary">Open studio</Link>
-        </div>
-      )}
+      ) : null}
     </AppShell>
   );
 }

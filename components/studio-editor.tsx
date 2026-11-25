@@ -1154,7 +1154,7 @@ export function StudioEditor({
                         <span className="model-radio" />
                         <span style={{ minWidth: 0 }}>
                           <b>{model.name}</b>
-                          <span>{model.provider} · {CAPABILITY_LABEL[action]}</span>
+                          <span>{CAPABILITY_LABEL[action]}</span>
                           {!model.planAllowed ? <span className="badge badge-warn" style={{ marginTop: 5 }}><Lock size={10} /> Upgrade required</span> : null}
                         </span>
                       </button>
@@ -1297,7 +1297,7 @@ export function StudioEditor({
             <>
               <h3 style={{ fontSize: 15 }}>Captions &amp; subtitles</h3>
               <p className="hint mt-1">
-                Automatic captions send the selected range&apos;s audio to {models.find((model) => model.capabilities.includes("transcription"))?.provider ?? "the transcription provider"}.
+                Automatic captions transcribe the selected range&apos;s audio.
               </p>
               <div className="cost-box">
                 <div className="cost-line"><span>Transcription estimate</span><b>{transcriptionModel && captionEstimate ? `${captionEstimate.credits} cr` : "—"}</b></div>

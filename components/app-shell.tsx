@@ -26,6 +26,8 @@ import {
   X,
 } from "lucide-react";
 import { Brand } from "./brand";
+import { LanguageSwitch } from "./language-runtime";
+import { T } from "./t";
 import { formatCredits } from "@/lib/format";
 
 interface NavItem {
@@ -39,10 +41,10 @@ const CUSTOMER_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, key: "dashboard" },
   { href: "/studio", label: "Studio", icon: Clapperboard, key: "studio" },
   { href: "/projects", label: "Projects", icon: FolderOpen, key: "projects" },
-  { href: "/library", label: "Media library", icon: Film, key: "library" },
+  { href: "/library", label: "Media", icon: Film, key: "library" },
   { href: "/usage", label: "Generation history", icon: Activity, key: "usage" },
-  { href: "/billing", label: "Billing & credits", icon: CreditCard, key: "billing" },
-  { href: "/settings", label: "Account settings", icon: Settings, key: "settings" },
+  { href: "/billing", label: "Billing", icon: CreditCard, key: "billing" },
+  { href: "/settings", label: "Account", icon: Settings, key: "settings" },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -56,6 +58,8 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/notifications", label: "Email notifications", icon: Mail, key: "admin-notifications" },
   { href: "/admin/audit", label: "Audit log", icon: ShieldCheck, key: "admin-audit" },
 ];
+
+const MOBILE_KEYS = ["dashboard", "studio", "library", "billing", "settings"];
 
 export interface ShellUser {
   id: string;
@@ -94,34 +98,33 @@ export function AppShell({
   }
 
   const navContent = (
-    <>
-      <div className="nav-group">
-        <div className="nav-label">{variant === "admin" ? "ADMINISTRATION" : "WORKSPACE"}</div>
-        {nav.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.key}
-              href={item.href}
-              className={`nav-link ${active === item.key ? "active" : ""}`}
-              onClick={() => setOpen(false)}
-            >
-              <Icon size={17} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
+    <nav className="nav-group" aria-label={variant === "admin" ? "Administration" : "Workspace"}>
+      <div className="nav-label">{variant === "admin" ? "ADMINISTRATION" : "WORKSPACE"}</div>
+      {nav.map((item) => {
+        const Icon = item.icon;
+        return (
+          <Link
+            key={item.key}
+            href={item.href}
+            className={`nav-link ${active === item.key ? "active" : ""}`}
+            aria-current={active === item.key ? "page" : undefined}
+            onClick={() => setOpen(false)}
+          >
+            <Icon size={17} />
+            <span><T>{item.label}</T></span>
+          </Link>
+        );
+      })}
       {isAdminShell ? (
-        <div className="nav-group">
+        <>
           <div className="nav-label">SWITCH</div>
           <Link href="/dashboard" className="nav-link">
             <Clapperboard size={17} />
-            <span>Customer studio</span>
+            <span><T>Customer studio</T></span>
           </Link>
-        </div>
+        </>
       ) : null}
-    </>
+    </nav>
   );
 
   return (
@@ -131,13 +134,13 @@ export function AppShell({
         {navContent}
         <div className="sidebar-footer">
           <div className="credit-panel">
-            <span>{isAdminShell ? "PLATFORM ACCOUNT" : "AVAILABLE CREDITS"}</span>
+            <span><T>{isAdminShell ? "PLATFORM ACCOUNT" : "AVAILABLE CREDITS"}</T></span>
             <b>{isAdminShell ? "ADMIN" : formatCredits(availableCredits)}</b>
             {isAdminShell ? (
-              <span className="tiny">Customer data is isolated</span>
+              <span className="tiny"><T>Customer data is isolated</T></span>
             ) : (
               <Link href="/billing">
-                <Wallet size={12} /> {planName ? `${planName} plan` : "Choose a plan"}
+                <Wallet size={12} /> {planName ? <><T>{planName}</T> <T>plan</T></> : <T>Choose a plan</T>}
               </Link>
             )}
           </div>
@@ -159,19 +162,20 @@ export function AppShell({
           <button className="btn btn-ghost btn-icon mobile-menu-btn" aria-label="Open menu" onClick={() => setOpen(true)}>
             <Menu size={19} />
           </button>
-          <span className="topbar-title">{title}</span>
+          <span className="topbar-title"><T>{title}</T></span>
           <span className="topbar-spacer" />
+          <LanguageSwitch compact />
           {isAdminShell ? (
             <span className="badge badge-violet">
-              <ShieldCheck size={12} /> Platform admin
+              <ShieldCheck size={12} /> <T>Platform admin</T>
             </span>
           ) : (
             <>
               <Link href="/billing" className="badge badge-lime" aria-label="Available credits">
-                <Wallet size={12} /> {formatCredits(availableCredits)} credits
+                <Wallet size={12} /> {formatCredits(availableCredits)} <T>credits</T>
               </Link>
               <Link href="/studio" className="btn btn-primary btn-sm">
-                <Sparkles size={14} /> Create
+                <Sparkles size={14} /> <T>Create</T>
               </Link>
             </>
           )}
@@ -181,12 +185,17 @@ export function AppShell({
 
       {variant === "customer" ? (
         <nav className="bottom-nav" aria-label="Primary">
-          {[CUSTOMER_NAV[0], CUSTOMER_NAV[1], CUSTOMER_NAV[3], CUSTOMER_NAV[5], CUSTOMER_NAV[6]].map((item) => {
+          {CUSTOMER_NAV.filter((item) => MOBILE_KEYS.includes(item.key)).map((item) => {
             const Icon = item.icon;
             return (
-              <Link key={item.key} href={item.href} className={active === item.key ? "active" : ""}>
+              <Link
+                key={item.key}
+                href={item.href}
+                className={active === item.key ? "active" : ""}
+                aria-current={active === item.key ? "page" : undefined}
+              >
                 <Icon size={20} />
-                <span>{item.label.split(" ")[0]}</span>
+                <span><T>{item.label}</T></span>
               </Link>
             );
           })}
@@ -204,16 +213,17 @@ export function AppShell({
               </button>
             </div>
             <div className="credit-panel" style={{ marginTop: 12 }}>
-              <span>AVAILABLE CREDITS</span>
+              <span><T>AVAILABLE CREDITS</T></span>
               <b>{formatCredits(availableCredits)}</b>
               <Link href="/billing" onClick={() => setOpen(false)}>
-                <Wallet size={12} /> {planName ? `${planName} plan` : "Choose a plan"}
+                <Wallet size={12} /> {planName ? <><T>{planName}</T> <T>plan</T></> : <T>Choose a plan</T>}
               </Link>
             </div>
             {navContent}
-            <div style={{ marginTop: "auto", paddingTop: 16 }}>
+            <div className="drawer-footer">
+              <LanguageSwitch />
               <button className="btn btn-secondary btn-block" onClick={logout}>
-                <LogOut size={15} /> Sign out
+                <LogOut size={15} /> <T>Sign out</T>
               </button>
             </div>
           </div>

@@ -61,6 +61,22 @@ export default defineConfig(async ({ command }) => {
         : {}),
     },
     plugins: [
+      {
+        name: "disable-vinext-link-prefetch",
+        enforce: "pre",
+        transform(code: string, id: string) {
+          if (!id.includes("vinext/dist/shims/link-prefetch.js")) return null;
+          const disabledCan = /function canLinkPrefetch\(input\)\s*\{[\s\S]*?\n\}/;
+          const disabledIntent = /function canLinkIntentPrefetch\(input\)\s*\{[\s\S]*?\n\}/;
+          if (!disabledCan.test(code) || !disabledIntent.test(code)) return null;
+          return {
+            code: code
+              .replace(disabledCan, "function canLinkPrefetch(input) { return false; }")
+              .replace(disabledIntent, "function canLinkIntentPrefetch(input) { return false; }"),
+            map: null,
+          };
+        },
+      },
       vinext(),
       sites({ mockAuth: !managedLinux }),
       connectorPreview(),

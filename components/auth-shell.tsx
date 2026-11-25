@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Brand } from "./brand";
+import { LanguageSwitch } from "./language-runtime";
 
 export function AuthShell({
   title,
@@ -15,7 +16,10 @@ export function AuthShell({
   return (
     <div className="auth-shell">
       <aside className="auth-aside">
-        <Brand href="/" />
+        <div className="row-between">
+          <Brand href="/" />
+          <LanguageSwitch compact />
+        </div>
         <div className="auth-quote">
           <div className="page-eyebrow">AI VIDEO &amp; IMAGE STUDIO</div>
           <h2>One studio for every idea you want to bring to life.</h2>
@@ -24,12 +28,9 @@ export function AuthShell({
             real timeline, and publish in minutes.
           </p>
         </div>
-        <div className="row wrap" style={{ gap: 18, position: "relative", zIndex: 1 }}>
-          <span className="badge badge-lime">Runway</span>
-          <span className="badge badge-violet">OpenAI</span>
-          <span className="badge badge-muted">Gemini</span>
-          <span className="badge badge-muted">Kling</span>
-        </div>
+        <p className="tiny muted">
+          A private, account-scoped creative workspace. Your projects and media stay yours.
+        </p>
       </aside>
       <main className="auth-main">
         <div className="auth-card">

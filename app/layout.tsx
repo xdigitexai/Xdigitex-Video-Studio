@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { LanguageRuntime } from "@/components/language-runtime";
+import { RouteProgress } from "@/components/route-progress";
 
 export const metadata: Metadata = {
   title: {
@@ -35,7 +36,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body><LanguageRuntime>{children}</LanguageRuntime></body>
+      <body>
+        <RouteProgress />
+        <LanguageRuntime>{children}</LanguageRuntime>
+      </body>
     </html>
   );
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BadgeCheck, ShieldCheck } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PasswordForm, ProfileForm } from "@/components/settings-forms";
+import { SettingsPreferences } from "@/components/settings-preferences";
 import { loadFrame, shellUser } from "@/lib/server/frame";
 import { formatCredits, formatDate } from "@/lib/format";
 
@@ -64,6 +65,7 @@ export default async function SettingsPage() {
             </div>
           </div>
 
+          <SettingsPreferences />
           <div className="card">
             <div className="card-head">
               <h3>Security</h3>
