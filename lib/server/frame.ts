@@ -1,6 +1,7 @@
 import { dbFromRequestEnv, runtimeEnv, type RuntimeEnv } from "./runtime";
 import type { Db } from "./db";
 import { pageActor, pageAdmin } from "./context";
+import type { AdminPermission } from "./admin-access";
 import { getWallet, type WalletSummary } from "./credits";
 import { getEntitlements, type Entitlements } from "./plans";
 import type { Actor } from "./auth-types";
@@ -24,8 +25,11 @@ export async function loadFrame(returnTo: string): Promise<Frame> {
   return { actor, db, env, wallet, entitlements };
 }
 
-export async function loadAdminFrame(returnTo: string): Promise<Frame> {
-  const actor = await pageAdmin(returnTo);
+export async function loadAdminFrame(
+  returnTo: string,
+  permission: AdminPermission = "admin.access",
+): Promise<Frame> {
+  const actor = await pageAdmin(returnTo, permission);
   const db = dbFromRequestEnv();
   const env = runtimeEnv();
   const [wallet, entitlements] = await Promise.all([

@@ -11,7 +11,7 @@ export default async function AdminAuditPage({
 }: {
   searchParams?: Promise<Record<string, unknown>> | Record<string, unknown>;
 }) {
-  const frame = await loadAdminFrame("/admin/audit");
+  const frame = await loadAdminFrame("/admin/audit", "audit.read");
   const raw = await Promise.resolve(searchParams ?? {});
   const action = typeof raw.action === "string" ? raw.action : "";
   const rows = await frame.db.all<{

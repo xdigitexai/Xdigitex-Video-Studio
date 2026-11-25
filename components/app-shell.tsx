@@ -83,8 +83,8 @@ export function AppShell({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const isAdmin = user.role === "admin" || user.role === "super_admin";
   const nav = variant === "admin" ? ADMIN_NAV : CUSTOMER_NAV;
+  const isAdminShell = variant === "admin";
   const initial = (user.displayName || user.email || "U").slice(0, 1).toUpperCase();
 
   async function logout() {
@@ -112,35 +112,34 @@ export function AppShell({
           );
         })}
       </div>
-      <div className="nav-group">
-        <div className="nav-label">SWITCH</div>
-        {variant === "admin" ? (
+      {isAdminShell ? (
+        <div className="nav-group">
+          <div className="nav-label">SWITCH</div>
           <Link href="/dashboard" className="nav-link">
             <Clapperboard size={17} />
             <span>Customer studio</span>
           </Link>
-        ) : isAdmin ? (
-          <Link href="/admin" className="nav-link">
-            <ShieldCheck size={17} />
-            <span>Admin console</span>
-          </Link>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </>
   );
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isAdminShell ? " admin-shell" : ""}`}>
       <aside className="sidebar">
         <Brand href={variant === "admin" ? "/admin" : "/dashboard"} />
         {navContent}
         <div className="sidebar-footer">
           <div className="credit-panel">
-            <span>AVAILABLE CREDITS</span>
-            <b>{formatCredits(availableCredits)}</b>
-            <Link href="/billing">
-              <Wallet size={12} /> {planName ? `${planName} plan` : "Choose a plan"}
-            </Link>
+            <span>{isAdminShell ? "PLATFORM ACCOUNT" : "AVAILABLE CREDITS"}</span>
+            <b>{isAdminShell ? "ADMIN" : formatCredits(availableCredits)}</b>
+            {isAdminShell ? (
+              <span className="tiny">Customer data is isolated</span>
+            ) : (
+              <Link href="/billing">
+                <Wallet size={12} /> {planName ? `${planName} plan` : "Choose a plan"}
+              </Link>
+            )}
           </div>
           <div className="user-chip">
             <span className="avatar">{initial}</span>
@@ -162,12 +161,20 @@ export function AppShell({
           </button>
           <span className="topbar-title">{title}</span>
           <span className="topbar-spacer" />
-          <Link href="/billing" className="badge badge-lime" aria-label="Available credits">
-            <Wallet size={12} /> {formatCredits(availableCredits)} credits
-          </Link>
-          <Link href="/studio" className="btn btn-primary btn-sm">
-            <Sparkles size={14} /> Create
-          </Link>
+          {isAdminShell ? (
+            <span className="badge badge-violet">
+              <ShieldCheck size={12} /> Platform admin
+            </span>
+          ) : (
+            <>
+              <Link href="/billing" className="badge badge-lime" aria-label="Available credits">
+                <Wallet size={12} /> {formatCredits(availableCredits)} credits
+              </Link>
+              <Link href="/studio" className="btn btn-primary btn-sm">
+                <Sparkles size={14} /> Create
+              </Link>
+            </>
+          )}
         </header>
         <main className="content">{children}</main>
       </div>

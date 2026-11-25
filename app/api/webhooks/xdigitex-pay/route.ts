@@ -7,11 +7,7 @@ import {
 } from "@/lib/server/email-templates";
 import { getPlan } from "@/lib/server/plans";
 import { applyGatewayResult, getPayment, recordPaymentEvent } from "@/lib/server/payments/service";
-import {
-  paymentGatewayConfig,
-  verifyWebhookSignature,
-  type GatewayPaymentStatus,
-} from "@/lib/server/payments/xdigitex";
+import { paymentGatewayConfig, verifyGatewaySettlement } from "@/lib/server/payments/xdigitex";
 import { json } from "@/lib/server/http";
 import { dbFromRequestEnv, runtimeEnv } from "@/lib/server/runtime";
 
@@ -20,62 +16,65 @@ export const dynamic = "force-dynamic";
 /**
  * Pay Xdigitex server-to-server webhook.
  *
- * Security:
- *  - Raw-body HMAC-SHA256 verification with XDIGITEX_WEBHOOK_SECRET.
- *  - A signature failure returns 401 and never touches payment state.
- *  - Duplicate deliveries are de-duplicated by a stable event key.
- *  - Amount and receipt checks happen before credits are allocated.
+ * The gateway does not publish a webhook signature, so the POST body is only a
+ * notification. Before any payment is fulfilled the reference is re-read from
+ * the authenticated GET /payments/{reference}/status endpoint. Amount and
+ * currency must match the stored record, and fulfillment is claim-once.
  */
 export async function POST(request: Request) {
   const env = runtimeEnv();
   const db = dbFromRequestEnv();
   const config = paymentGatewayConfig(env);
-  if (!config?.webhookSecret) {
-    return json({ error: "Webhook secret is not configured.", code: "WEBHOOK_NOT_CONFIGURED" }, 503);
+  if (!config) {
+    return json({ error: "Payment gateway is not configured.", code: "PAYMENT_NOT_CONFIGURED" }, 503);
   }
+
   const rawBody = await request.text();
   if (rawBody.length > 200_000) {
     return json({ error: "Payload too large.", code: "PAYLOAD_TOO_LARGE" }, 413);
   }
-  const signature = request.headers.get("x-webhook-signature");
-  const valid = await verifyWebhookSignature(config.webhookSecret, rawBody, signature);
-  if (!valid) {
-    await recordPaymentEvent(db, {
-      paymentId: null,
-      eventKey: `invalid:${Date.now()}:${crypto.randomUUID()}`,
-      eventType: "webhook.signature_invalid",
-      payload: { headerEvent: request.headers.get("x-webhook-event") },
-      signatureValid: false,
-    });
-    return json({ error: "Invalid signature.", code: "INVALID_SIGNATURE" }, 401);
-  }
-
   let payload: Record<string, unknown>;
   try {
     payload = JSON.parse(rawBody) as Record<string, unknown>;
   } catch {
     return json({ error: "Invalid JSON.", code: "INVALID_JSON" }, 400);
   }
-  const headerEvent = request.headers.get("x-webhook-event") || "";
-  const event = typeof payload.event === "string" ? payload.event : headerEvent;
-  const data = (payload.data && typeof payload.data === "object" ? payload.data : {}) as Record<string, unknown>;
-  const checkoutRequestId = typeof data.checkoutRequestId === "string" ? data.checkoutRequestId : "";
-  const rawStatus = String(data.status ?? "").toLowerCase();
-  const status: GatewayPaymentStatus =
-    event === "payment.completed" || rawStatus === "completed"
-      ? "completed"
-      : event === "payment.failed" || rawStatus === "failed"
-        ? "failed"
-        : event === "payment.cancelled" || event === "payment.canceled" || rawStatus === "cancelled"
-          ? "cancelled"
-          : "pending";
-  const receipt = typeof data.mpesaReceiptNumber === "string" ? data.mpesaReceiptNumber : null;
-  const eventKey = `wh:${event || "unknown"}:${checkoutRequestId}:${status}:${receipt ?? ""}`;
 
+  const event =
+    typeof payload.event === "string"
+      ? payload.event
+      : request.headers.get("x-webhook-event") || "payment.notification";
+  const reference =
+    (typeof payload.reference === "string" && payload.reference) ||
+    (typeof payload.payment_reference === "string" && payload.payment_reference) ||
+    "";
+  if (!reference) {
+    return json({ ok: true, unmatched: true });
+  }
+  if (!["payment.completed", "payment.failed"].includes(event)) {
+    return json({ ok: true, ignored: true, event });
+  }
+
+  const payment = await db.first<Awaited<ReturnType<typeof getPayment>>>(
+    `SELECT * FROM payments WHERE provider_checkout_id = ? ORDER BY created_at DESC LIMIT 1`,
+    [reference],
+  );
+  if (!payment) {
+    await recordPaymentEvent(db, {
+      paymentId: null,
+      eventKey: `wh:${event}:${reference}`,
+      eventType: event,
+      payload,
+      signatureValid: false,
+    });
+    return json({ ok: true, unmatched: true });
+  }
+
+  const eventKey = `wh:${event}:${reference}:${payment.id}`;
   const inserted = await recordPaymentEvent(db, {
-    paymentId: null,
+    paymentId: payment.id,
     eventKey,
-    eventType: event || `payment.${status}`,
+    eventType: event,
     payload,
     signatureValid: true,
   });
@@ -83,112 +82,113 @@ export async function POST(request: Request) {
     return json({ ok: true, duplicate: true });
   }
 
-  let payment = checkoutRequestId
-    ? await db.first<Awaited<ReturnType<typeof getPayment>>>(
-        `SELECT * FROM payments WHERE provider_checkout_id = ? ORDER BY created_at DESC LIMIT 1`,
-        [checkoutRequestId],
-      )
-    : null;
-  if (!payment && typeof data.accountReference === "string") {
-    payment = await db.first<Awaited<ReturnType<typeof getPayment>>>(
-      `SELECT * FROM payments WHERE reference = ? LIMIT 1`,
-      [data.accountReference],
+  let status;
+  try {
+    status = await verifyGatewaySettlement(
+      config,
+      reference,
+      Math.round(payment.amount_minor / 100),
+      payment.currency,
     );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gateway verification failed.";
+    return json({ error: message, code: "GATEWAY_VERIFICATION_FAILED" }, 502);
   }
-  if (!payment) {
-    // Acknowledge so the gateway does not retry an orphan forever; admins can
-    // inspect the recorded event and reconcile manually.
-    return json({ ok: true, unmatched: true });
-  }
-  await db.run(`UPDATE payment_events SET payment_id = ? WHERE event_key = ? AND payment_id IS NULL`, [
-    payment.id,
-    eventKey,
-  ]);
 
-  const amountKes = data.amount === undefined || data.amount === null ? null : Number(data.amount);
-  await applyGatewayResult(db, payment, {
-    status,
-    receipt,
-    amountKes: Number.isFinite(amountKes) ? amountKes : null,
-    raw: payload,
+  const expectedStatus = event === "payment.completed" ? "completed" : "failed";
+  if (status.status !== expectedStatus) {
+    return json({ ok: true, ignored: true, gatewayStatus: status.status });
+  }
+
+  const result = await applyGatewayResult(db, payment, {
+    status: status.status,
+    receipt: status.receipt,
+    amountLocal: status.amount,
+    currency: status.currency,
+    raw: status.raw,
     source: "webhook",
   });
 
-  const settled = await getPayment(db, payment.id);
-  if (settled && settled.status !== "pending" && settled.status !== "processing") {
-    const user = await db.first<{ email: string; display_name: string }>(
-      `SELECT email, display_name FROM users WHERE id = ? LIMIT 1`,
-      [settled.user_id],
-    );
-    if (user) {
-      const mailConfig = emailConfig(env, request);
-      const plan = settled.plan_id ? await getPlan(db, settled.plan_id) : null;
-      const siteUrl = env.APP_URL;
-      const amount = settled.amount_minor ? settled.amount_minor / 100 : Number.isFinite(amountKes) ? amountKes : null;
+  const settled = result.payment;
+  if (settled.status !== "completed" && settled.status !== "failed" && settled.status !== "cancelled") {
+    return json({ ok: true, status: settled.status });
+  }
 
-      if (
-        settled.status === "completed" &&
-        !(await emailAlreadySent(db, "payment_successful", settled.reference))
-      ) {
-        await trySendRenderedEmail(
-          db,
-          mailConfig,
-          user.email,
-          "payment_successful",
-          paymentSuccessfulEmail({
-            name: user.display_name,
-            amount,
-            currency: settled.currency || "KES",
-            reference: settled.reference,
-            receipt: settled.provider_receipt,
-            purpose: settled.purpose,
-            credits: settled.credits,
-            siteUrl,
-          }),
-        );
-      }
+  const user = await db.first<{ email: string; display_name: string }>(
+    `SELECT email, display_name FROM users WHERE id = ? LIMIT 1`,
+    [settled.user_id],
+  );
+  if (user) {
+    const mailConfig = emailConfig(env, request);
+    const plan = settled.plan_id ? await getPlan(db, settled.plan_id) : null;
+    const siteUrl = env.APP_URL;
+    const amount = settled.amount_minor / 100;
+    const currency = settled.currency || "KES";
 
-      if (
-        settled.status === "completed" &&
-        plan &&
-        ["subscription", "subscription_renewal", "plan_change"].includes(settled.purpose) &&
-        !(await emailAlreadySent(db, "subscription_activated", settled.reference))
-      ) {
-        await trySendRenderedEmail(
-          db,
-          mailConfig,
-          user.email,
-          "subscription_activated",
-          subscriptionActivatedEmail({
-            name: user.display_name,
-            plan: plan.name,
-            credits: settled.credits,
-            siteUrl,
-          }),
-        );
-      }
+    if (
+      settled.status === "completed" &&
+      result.applied &&
+      !(await emailAlreadySent(db, "payment_successful", settled.reference))
+    ) {
+      await trySendRenderedEmail(
+        db,
+        mailConfig,
+        user.email,
+        "payment_successful",
+        paymentSuccessfulEmail({
+          name: user.display_name,
+          amount,
+          currency,
+          reference: settled.reference,
+          receipt: settled.provider_receipt,
+          purpose: settled.purpose,
+          credits: settled.credits,
+          siteUrl,
+        }),
+      );
+    }
 
-      if (
-        (settled.status === "failed" || settled.status === "cancelled") &&
-        !(await emailAlreadySent(db, "payment_failed", settled.reference))
-      ) {
-        await trySendRenderedEmail(
-          db,
-          mailConfig,
-          user.email,
-          "payment_failed",
-          paymentFailedEmail({
-            name: user.display_name,
-            amount,
-            currency: settled.currency || "KES",
-            reference: settled.reference,
-            reason: settled.failure_reason,
-            siteUrl,
-          }),
-        );
-      }
+    if (
+      settled.status === "completed" &&
+      result.applied &&
+      plan &&
+      ["subscription", "subscription_renewal", "plan_change"].includes(settled.purpose) &&
+      !(await emailAlreadySent(db, "subscription_activated", settled.reference))
+    ) {
+      await trySendRenderedEmail(
+        db,
+        mailConfig,
+        user.email,
+        "subscription_activated",
+        subscriptionActivatedEmail({
+          name: user.display_name,
+          plan: plan.name,
+          credits: settled.credits,
+          siteUrl,
+        }),
+      );
+    }
+
+    if (
+      (settled.status === "failed" || settled.status === "cancelled") &&
+      !(await emailAlreadySent(db, "payment_failed", settled.reference))
+    ) {
+      await trySendRenderedEmail(
+        db,
+        mailConfig,
+        user.email,
+        "payment_failed",
+        paymentFailedEmail({
+          name: user.display_name,
+          amount,
+          currency,
+          reference: settled.reference,
+          reason: settled.failure_reason,
+          siteUrl,
+        }),
+      );
     }
   }
 
-  return json({ ok: true });
+  return json({ ok: true, status: settled.status, applied: result.applied });
 }

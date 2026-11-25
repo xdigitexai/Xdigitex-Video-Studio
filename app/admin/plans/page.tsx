@@ -8,7 +8,7 @@ import { listModelRows } from "@/lib/server/models";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPlansPage() {
-  const frame = await loadAdminFrame("/admin/plans");
+  const frame = await loadAdminFrame("/admin/plans", "plans.read");
   const [plans, links, models] = await Promise.all([
     listPlans(frame.db),
     frame.db.all<{ plan_id: string; model_id: string }>(`SELECT plan_id, model_id FROM plan_models`),

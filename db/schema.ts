@@ -25,6 +25,8 @@ export const users = sqliteTable(
     status: text("status").notNull().default("active"),
     emailVerifiedAt: integer("email_verified_at"),
     legacyOwnerId: text("legacy_owner_id"),
+    mfaEnabled: integer("mfa_enabled").notNull().default(0),
+    mfaSecret: text("mfa_secret"),
     lastLoginAt: integer("last_login_at"),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
@@ -47,8 +49,20 @@ export const sessions = sqliteTable(
     lastSeenAt: integer("last_seen_at").notNull(),
     ip: text("ip"),
     userAgent: text("user_agent"),
+    mfaVerifiedAt: integer("mfa_verified_at"),
   },
   (table) => [index("sessions_user_idx").on(table.userId), index("sessions_expires_idx").on(table.expiresAt)],
+);
+
+export const adminPermissions = sqliteTable(
+  "admin_permissions",
+  {
+    userId: text("user_id").primaryKey(),
+    permissions: text("permissions").notNull().default("[]"),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (table) => [index("admin_permissions_user_idx").on(table.userId)],
 );
 
 export const authTokens = sqliteTable(

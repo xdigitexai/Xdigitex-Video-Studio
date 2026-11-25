@@ -16,6 +16,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import { AdminMfaCard } from "@/components/admin-mfa-card";
 import { loadAdminFrame, shellUser } from "@/lib/server/frame";
 import {
   adminOverview,
@@ -353,6 +354,8 @@ export default async function AdminOverviewPage({
               </Link>
             </div>
           </div>
+
+          <AdminMfaCard />
         </div>
       </div>
     </AppShell>

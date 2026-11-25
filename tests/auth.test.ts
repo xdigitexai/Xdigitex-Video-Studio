@@ -18,7 +18,7 @@ import {
 } from "../lib/server/auth";
 import { ApiError } from "../lib/server/http";
 
-const authConfig = { platformAuthEnabled: true, adminEmails: ["boss@xdigitex.test"], sessionDays: 30 };
+const authConfig = { platformAuthEnabled: true, sessionDays: 30 };
 
 test("registration hashes the password and requires email verification", async () => {
   const db = createTestDb();
@@ -65,15 +65,18 @@ test("duplicate registration and wrong passwords are rejected", async () => {
   );
 });
 
-test("the first configured administrator email becomes a super administrator", async () => {
+test("public registration always creates a customer, never an admin", async () => {
   const db = createTestDb();
   const { user } = await registerAccount(db, {
-    email: "boss@xdigitex.test",
+    email: "digitex.ac.ke@gmail.com",
     password: "password-123",
-    adminEmails: authConfig.adminEmails,
     emailVerificationRequired: false,
+    // Legacy callers may still pass this field; it is ignored by design.
+    ...({ adminEmails: ["digitex.ac.ke@gmail.com"] } as unknown as Record<string, never>),
   });
-  assert.equal(user.role, "super_admin");
+  assert.equal(user.role, "customer");
+  const stored = await db.first<{ role: string }>(`SELECT role FROM users WHERE id = ?`, [user.id]);
+  assert.equal(stored?.role, "customer");
 });
 
 test("sessions authenticate and expire", async () => {
@@ -135,7 +138,7 @@ test("password change verifies the current password", async () => {
   assert.equal(login.user.id, user.id);
 });
 
-test("platform header identity provisions a local user and claims legacy projects", async () => {
+test("platform header identity provisions a customer and claims legacy projects", async () => {
   const db = createTestDb();
   const legacyId = "chatgpt-user-42";
   const timestamp = Date.now();
@@ -153,6 +156,7 @@ test("platform header identity provisions a local user and claims legacy project
   const actor = await resolveActor(db, headers, authConfig);
   assert.ok(actor);
   assert.equal(actor?.user.email, "legacy@studio.test");
+  assert.equal(actor?.user.role, "customer", "header handoff cannot self-promote");
   assert.equal(actor?.via, "platform_header");
   const project = await db.first<{ owner_id: string }>(`SELECT owner_id FROM projects WHERE name = 'Legacy project'`);
   assert.equal(project?.owner_id, actor!.user.id);

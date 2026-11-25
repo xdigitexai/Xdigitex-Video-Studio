@@ -7,10 +7,11 @@ import { grantCredits } from "../credits";
 import { recordAudit } from "../audit";
 import {
   fetchPaymentStatus,
-  initiateStkPush,
+  initiatePayment,
   type GatewayPaymentStatus,
   type XdigitexConfig,
 } from "./xdigitex";
+import type { PaymentGateway } from "../../payment-countries";
 import { getPricingSettings } from "../settings";
 
 export interface PaymentRow {
@@ -52,6 +53,13 @@ export async function getPayment(db: Db, id: string): Promise<PaymentRow | null>
   return db.first<PaymentRow>(`SELECT * FROM payments WHERE id = ?`, [id]);
 }
 
+/** Customer isolation gate. Always returns 404 so IDs cannot be enumerated. */
+export function assertPaymentOwner(payment: PaymentRow | null, userId: string): asserts payment is PaymentRow {
+  if (!payment || payment.user_id !== userId) {
+    throw new ApiError(404, "Payment not found.", "PAYMENT_NOT_FOUND");
+  }
+}
+
 export async function listPayments(
   db: Db,
   options: { userId?: string; status?: string; limit?: number; offset?: number; since?: number; until?: number } = {},
@@ -90,6 +98,8 @@ export interface CreatePaymentInput {
   packageId?: string | null;
   credits: number;
   priceUsdCents: number;
+  currency?: string;
+  localAmount?: number;
   metadata?: Record<string, unknown>;
   subscriptionId?: string | null;
 }
@@ -97,25 +107,35 @@ export interface CreatePaymentInput {
 export interface CreatedPayment {
   payment: PaymentRow;
   reused: boolean;
-  amountKes: number;
+  amountLocal: number;
+  currency: string;
 }
 
 export async function createPayment(db: Db, input: CreatePaymentInput): Promise<CreatedPayment> {
   const settings = await getPricingSettings(db);
-  const amountKes = Math.max(
-    1,
-    Math.round((input.priceUsdCents / 100) * (settings.usd_to_kes_rate_micros / 1_000_000)),
-  );
+  const currency = (input.currency || "KES").toUpperCase();
+  const fallback =
+    currency === "KES"
+      ? Math.round((input.priceUsdCents / 100) * (settings.usd_to_kes_rate_micros / 1_000_000))
+      : Math.round(input.priceUsdCents / 100);
+  const amountLocal = Math.max(1, Math.round(input.localAmount ?? fallback));
   const recent = await db.first<PaymentRow>(
     `SELECT * FROM payments
      WHERE user_id = ? AND status = 'pending' AND purpose = ?
        AND COALESCE(plan_id, '') = COALESCE(?, '') AND COALESCE(package_id, '') = COALESCE(?, '')
-       AND created_at > ?
+       AND currency = ? AND created_at > ?
      ORDER BY created_at DESC LIMIT 1`,
-    [input.userId, input.purpose, input.planId ?? null, input.packageId ?? null, now() - 2 * 60_000],
+    [
+      input.userId,
+      input.purpose,
+      input.planId ?? null,
+      input.packageId ?? null,
+      currency,
+      now() - 2 * 60_000,
+    ],
   );
-  if (recent && recent.amount_minor === amountKes * 100) {
-    return { payment: recent, reused: true, amountKes };
+  if (recent && recent.amount_minor === amountLocal * 100) {
+    return { payment: recent, reused: true, amountLocal, currency };
   }
   const timestamp = now();
   const payment: PaymentRow = {
@@ -123,12 +143,12 @@ export async function createPayment(db: Db, input: CreatePaymentInput): Promise<
     user_id: input.userId,
     reference: newReference("XDG"),
     purpose: input.purpose,
-    provider: "xdigitex_pay",
+    provider: "xdigitex_pay_space",
     plan_id: input.planId ?? null,
     package_id: input.packageId ?? null,
     subscription_id: input.subscriptionId ?? null,
-    amount_minor: amountKes * 100,
-    currency: "KES",
+    amount_minor: amountLocal * 100,
+    currency,
     price_usd_cents: input.priceUsdCents,
     credits: input.credits,
     status: "pending",
@@ -166,32 +186,39 @@ export async function createPayment(db: Db, input: CreatePaymentInput): Promise<
       payment.updated_at,
     ],
   );
-  return { payment, reused: false, amountKes };
+  return { payment, reused: false, amountLocal, currency };
 }
 
 export interface CheckoutInput {
   payment: PaymentRow;
+  gateway: PaymentGateway;
   phoneNumber: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
   description: string;
   config: XdigitexConfig | null;
-  baseUrl?: string;
+  callbackUrl?: string;
+  webhookUrl?: string;
 }
 
 export interface CheckoutResult {
   payment: PaymentRow;
-  checkoutRequestId: string;
+  checkoutReference: string;
+  redirectUrl: string | null;
   message: string;
 }
 
 /**
- * Starts the STK push. A browser redirect or a success page is never treated as
- * proof of payment; only a verified gateway status/webhook completes the order.
+ * Starts a card or mobile-money payment. A browser redirect or a success page
+ * is never treated as proof of payment; only a verified gateway status/webhook
+ * completes the order.
  */
 export async function startCheckout(db: Db, input: CheckoutInput): Promise<CheckoutResult> {
   if (!input.config) {
     throw new ApiError(
       503,
-      "Card and M-Pesa payments are not configured. Add the Pay Xdigitex API key.",
+      "Card and mobile-money payments are not configured. Add the Pay Xdigitex API key.",
       "PAYMENT_NOT_CONFIGURED",
     );
   }
@@ -199,30 +226,53 @@ export async function startCheckout(db: Db, input: CheckoutInput): Promise<Check
     throw new ApiError(409, "This payment can no longer be started.", "PAYMENT_NOT_PENDING");
   }
   if (input.payment.provider_checkout_id) {
+    const existing = parseJson<Record<string, unknown>>(input.payment.metadata, {});
     return {
       payment: input.payment,
-      checkoutRequestId: input.payment.provider_checkout_id,
-      message: "Waiting for you to approve the payment prompt on your phone.",
+      checkoutReference: input.payment.provider_checkout_id,
+      redirectUrl: typeof existing.redirectUrl === "string" ? existing.redirectUrl : null,
+      message: "Waiting for the gateway to confirm this payment.",
     };
   }
-  const amountKes = Math.round(input.payment.amount_minor / 100);
+  const amount = Math.round(input.payment.amount_minor / 100);
   try {
-    const result = await initiateStkPush(input.config, {
-      phoneNumber: input.phoneNumber,
-      amountKes,
-      accountReference: input.payment.reference,
-      transactionDesc: input.description.slice(0, 100),
+    const result = await initiatePayment(input.config, {
+      gateway: input.gateway,
+      amount,
+      currency: input.payment.currency,
+      phone: input.phoneNumber,
+      email: input.email,
+      firstName: input.firstName,
+      lastName: input.lastName,
+      description: input.description,
+      callbackUrl: input.callbackUrl,
+      webhookUrl: input.webhookUrl,
+      referenceHint: input.payment.reference,
     });
     const timestamp = now();
+    const metadata = {
+      ...parseJson<Record<string, unknown>>(input.payment.metadata, {}),
+      gateway: input.gateway,
+      gatewayReference: result.reference,
+      redirectUrl: result.redirectUrl,
+      gatewayMessage: result.message,
+      gatewayFee: result.raw.fee ?? null,
+    };
     await db.run(
-      `UPDATE payments SET provider_checkout_id = ?, phone_number = ?, updated_at = ? WHERE id = ? AND status = 'pending'`,
-      [result.checkoutRequestId, input.phoneNumber, timestamp, input.payment.id],
+      `UPDATE payments SET provider_checkout_id = ?, phone_number = ?, metadata = ?, updated_at = ?
+       WHERE id = ? AND status = 'pending'`,
+      [result.reference, input.phoneNumber, JSON.stringify(metadata), timestamp, input.payment.id],
     );
     const payment = (await getPayment(db, input.payment.id))!;
     return {
       payment,
-      checkoutRequestId: result.checkoutRequestId,
-      message: "Approve the M-Pesa prompt on your phone to complete the payment.",
+      checkoutReference: result.reference,
+      redirectUrl: result.redirectUrl,
+      message:
+        result.message ||
+        (input.gateway === "card"
+          ? "Continue on the secure card checkout page. Credits are added only after confirmation."
+          : "Approve the payment prompt on your phone to complete the payment."),
     };
   } catch (error) {
     const status = (error as { status?: number }).status ?? 500;
@@ -279,8 +329,8 @@ export async function recordPaymentEvent(
 }
 
 /**
- * Applies a verified gateway result. Amount mismatches and duplicate receipts are
- * rejected before any credit can be granted.
+ * Applies a gateway result already verified against the gateway status API.
+ * Amount, currency and duplicate-receipt checks happen before any credit grant.
  */
 export async function applyGatewayResult(
   db: Db,
@@ -288,7 +338,8 @@ export async function applyGatewayResult(
   result: {
     status: GatewayPaymentStatus;
     receipt: string | null;
-    amountKes: number | null;
+    amountLocal: number | null;
+    currency?: string | null;
     raw: unknown;
     source: "webhook" | "status_poll" | "admin";
   },
@@ -299,10 +350,17 @@ export async function applyGatewayResult(
   if (payment.status === "refunded") {
     return { payment, applied: false, alreadyCompleted: true, error: "Payment was refunded." };
   }
-  const expectedKes = Math.round(payment.amount_minor / 100);
+  const expectedAmount = Math.round(payment.amount_minor / 100);
   if (result.status === "completed") {
-    if (result.amountKes !== null && Math.abs(result.amountKes - expectedKes) >= 1) {
-      const reason = `amount_mismatch: expected ${expectedKes} KES, received ${result.amountKes} KES`;
+    const mismatchReasons: string[] = [];
+    if (result.amountLocal !== null && Math.abs(result.amountLocal - expectedAmount) >= 1) {
+      mismatchReasons.push(`expected ${expectedAmount} ${payment.currency}, received ${result.amountLocal}`);
+    }
+    if (result.currency && result.currency.toUpperCase() !== payment.currency.toUpperCase()) {
+      mismatchReasons.push(`expected currency ${payment.currency}, received ${result.currency}`);
+    }
+    if (mismatchReasons.length) {
+      const reason = `amount_mismatch: ${mismatchReasons.join("; ")}`;
       await db.run(
         `UPDATE payments SET status = 'failed', failure_reason = ?, updated_at = ? WHERE id = ? AND status != 'completed'`,
         [reason, now(), payment.id],
@@ -311,7 +369,7 @@ export async function applyGatewayResult(
         action: "payment.amount_mismatch",
         targetType: "payment",
         targetId: payment.id,
-        metadata: { expectedKes, receivedKes: result.amountKes },
+        metadata: { expectedAmount, currency: payment.currency, received: result },
       });
       return { payment: (await getPayment(db, payment.id))!, applied: false, alreadyCompleted: false, error: reason };
     }
@@ -368,7 +426,7 @@ export async function fulfillPayment(
 
   try {
     let subscriptionId = payment.subscription_id;
-    let metadataPatch: Record<string, unknown> = { evidenceSource: evidence.source };
+    let metadataPatch: Record<string, unknown> = { evidenceSource: evidence.source, settledAt: now() };
 
     if (payment.purpose === "credit_topup") {
       const granted = await grantCredits(db, {
@@ -477,7 +535,8 @@ export async function pollPayment(
   return applyGatewayResult(db, payment, {
     status: status.status,
     receipt: status.receipt,
-    amountKes: status.amountKes,
+    amountLocal: status.amount,
+    currency: status.currency,
     raw: status.raw,
     source: "status_poll",
   });
@@ -550,27 +609,19 @@ export async function refundPayment(
   return { refunded: true, clawedBack: clawed ? payment.credits : 0, shortfall: clawed ? 0 : payment.credits };
 }
 
-export function paymentAmountKes(payment: PaymentRow): number {
-  return Math.round(payment.amount_minor / 100);
-}
-
-export function paymentPlan(db: Db, payment: PaymentRow): Promise<PlanRow | null> {
-  return payment.plan_id ? getPlan(db, payment.plan_id) : Promise.resolve(null);
-}
-
-export async function paymentSubscription(db: Db, payment: PaymentRow) {
-  return payment.subscription_id ? getSubscriptionById(db, payment.subscription_id) : null;
-}
-
-
 /** Customer-safe payment shape. */
 export function paymentView(payment: PaymentRow) {
+  const metadata = parseJson<Record<string, unknown>>(payment.metadata, {});
   return {
     id: payment.id,
     reference: payment.reference,
     purpose: payment.purpose,
     status: payment.status,
-    amountKes: Math.round(payment.amount_minor / 100),
+    amountLocal: Math.round(payment.amount_minor / 100),
+    amountKes: payment.currency === "KES" ? Math.round(payment.amount_minor / 100) : null,
+    currency: payment.currency,
+    gateway: typeof metadata.gateway === "string" ? metadata.gateway : null,
+    redirectUrl: typeof metadata.redirectUrl === "string" ? metadata.redirectUrl : null,
     priceUsd: payment.price_usd_cents / 100,
     credits: payment.credits,
     planId: payment.plan_id,

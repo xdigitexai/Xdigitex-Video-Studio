@@ -1,10 +1,9 @@
-import type { Role, UserRow } from "@/lib/server/auth-types";
-import { createSession, isAdminRole } from "@/lib/server/auth";
+import type { UserRow } from "@/lib/server/auth-types";
+import { createSession } from "@/lib/server/auth";
 import { auditRequest, contextFromRequest } from "@/lib/server/context";
 import { emailConfig, trySendRenderedEmail } from "@/lib/server/email-notifications";
 import { newLoginEmail } from "@/lib/server/email-templates";
 import { clientIp, userAgent } from "@/lib/server/http";
-import { adminEmails } from "@/lib/server/runtime";
 import { publicUser, sessionCookieHeader } from "@/lib/server/session";
 import { normalizeEmail } from "@/lib/server/util";
 
@@ -89,7 +88,7 @@ export async function GET(request: Request) {
     let user = await db.first<UserRow>(`SELECT * FROM users WHERE email_normalized = ? LIMIT 1`, [emailNormalized]);
     if (!user) {
       const id = `usr_${crypto.randomUUID().replace(/-/g, "")}`;
-      const role: Role = adminEmails(env).includes(emailNormalized) ? "super_admin" : "customer";
+      const role = "customer" as const;
       const displayName = String(claims.name || emailNormalized.split("@")[0]).slice(0, 80) || "Creator";
       await db.batch([
         {
@@ -138,7 +137,7 @@ export async function GET(request: Request) {
       }),
     );
     const requested = safeReturn(claims.return_to);
-    const destination = requested === "/dashboard" && isAdminRole(user.role) ? "/admin" : requested;
+    const destination = requested;
     return new Response(null, {
       status: 302,
       headers: {

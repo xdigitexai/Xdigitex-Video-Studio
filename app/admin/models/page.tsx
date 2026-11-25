@@ -7,7 +7,7 @@ import { ADAPTERS } from "@/lib/server/providers";
 export const dynamic = "force-dynamic";
 
 export default async function AdminModelsPage() {
-  const frame = await loadAdminFrame("/admin/models");
+  const frame = await loadAdminFrame("/admin/models", "models.read");
   const [models, providers] = await Promise.all([listModelRows(frame.db), listProviders(frame.db)]);
   const adminModels: AdminModel[] = models.map((model) => ({
     id: model.id,

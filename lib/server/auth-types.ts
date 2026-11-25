@@ -8,6 +8,8 @@ export interface UserRow {
   status: string;
   email_verified_at: number | null;
   legacy_owner_id: string | null;
+  mfa_enabled: number;
+  mfa_secret: string | null;
   last_login_at: number | null;
   created_at: number;
   updated_at: number;
@@ -18,10 +20,11 @@ export type Role = "super_admin" | "admin" | "customer";
 export interface Actor {
   user: UserRow;
   via: "session" | "platform_header";
+  sessionId?: string;
+  mfaVerified?: boolean;
 }
 
 export interface AuthConfig {
   platformAuthEnabled: boolean;
-  adminEmails: string[];
   sessionDays: number;
 }

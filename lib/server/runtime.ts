@@ -28,7 +28,7 @@ export interface RuntimeEnv {
   EMAIL_RELAY_SECRET?: string;
   MAIL_API_URL?: string;
   MAIL_API_KEY?: string;
-  ADMIN_EMAILS?: string;
+  ADMIN_BOOTSTRAP_EMAIL?: string;
   PLATFORM_AUTH_HEADERS?: string;
   APP_URL?: string;
   CRON_SECRET?: string;
@@ -50,13 +50,6 @@ export function databaseFromEnv(source: RuntimeEnv): Db {
 
 export function dbFromRequestEnv(): Db {
   return databaseFromEnv(runtimeEnv());
-}
-
-export function adminEmails(source: RuntimeEnv): string[] {
-  return (source.ADMIN_EMAILS || "")
-    .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
 }
 
 export function platformAuthEnabled(source: RuntimeEnv): boolean {

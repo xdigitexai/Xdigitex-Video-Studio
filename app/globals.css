@@ -76,6 +76,19 @@ p { margin: 0; }
 
 /* ---------- Layout ---------- */
 .app-shell { min-height: 100dvh; display: flex; }
+.app-shell.admin-shell {
+  background: radial-gradient(900px 420px at 85% -10%, rgba(112, 23, 245, 0.18), transparent 60%), var(--bg);
+}
+.admin-shell .sidebar {
+  border-right-color: rgba(112, 23, 245, 0.38);
+  background: linear-gradient(180deg, rgba(8, 11, 46, 0.98), rgba(13, 16, 32, 0.99));
+}
+.admin-shell .topbar { border-bottom-color: rgba(112, 23, 245, 0.3); }
+.mfa-secret {
+  display: block; padding: 10px; border-radius: 10px; border: 1px dashed var(--line);
+  background: rgba(8, 11, 46, 0.55); color: var(--lime); font-size: 12px;
+  word-break: break-all; letter-spacing: 0.08em;
+}
 .sidebar {
   width: 252px;
   flex: none;

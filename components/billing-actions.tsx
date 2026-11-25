@@ -1,9 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Check, CreditCard, LoaderCircle, Smartphone, Sparkles } from "lucide-react";
-import { formatKes } from "@/lib/format";
+import {
+  AlertTriangle,
+  Check,
+  CreditCard,
+  ExternalLink,
+  LoaderCircle,
+  Smartphone,
+  Sparkles,
+} from "lucide-react";
+import {
+  detectPaymentNumber,
+  formatLocalMoney,
+  localAmountFromUsd,
+  type PaymentGateway,
+} from "@/lib/payment-countries";
 
 export interface PlanLite {
   id: string;
@@ -31,11 +44,26 @@ interface PaymentState {
   id: string;
   reference: string;
   status: string;
-  amountKes: number;
+  amountLocal: number;
+  amountKes: number | null;
+  currency: string;
+  gateway: string | null;
+  redirectUrl?: string | null;
   priceUsd: number;
   credits: number;
   receipt?: string | null;
   failureReason?: string | null;
+}
+
+interface CheckoutResponse {
+  error?: string;
+  message?: string;
+  payment?: PaymentState;
+  redirectUrl?: string | null;
+  country?: string;
+  network?: string | null;
+  currency?: string;
+  amountLocal?: number;
 }
 
 export function BillingActions({
@@ -44,7 +72,7 @@ export function BillingActions({
   currentPlanId,
   subscription,
   gatewayConfigured,
-  usdToKesRate,
+  currencyRates,
   renewalDue,
 }: {
   plans: PlanLite[];
@@ -52,16 +80,18 @@ export function BillingActions({
   currentPlanId: string | null;
   subscription: { status: string; cancelAtPeriodEnd: boolean; periodEnd: number; pendingPlanId: string | null } | null;
   gatewayConfigured: boolean;
-  usdToKesRate: number;
+  currencyRates: Record<string, number>;
   renewalDue: boolean;
 }) {
   const router = useRouter();
   const [phone, setPhone] = useState("");
+  const [gateway, setGateway] = useState<PaymentGateway>("mobile");
   const [packId, setPackId] = useState(packages[0]?.id ?? "");
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [payment, setPayment] = useState<PaymentState | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = useState("");
   const cancelled = useRef(false);
 
   useEffect(() => {
@@ -71,6 +101,11 @@ export function BillingActions({
     };
   }, []);
 
+  const detected = useMemo(() => detectPaymentNumber(phone), [phone]);
+  const currency = detected?.currency ?? "KES";
+  const rate = detected ? currencyRates[detected.currency] ?? detected.usdRate : currencyRates.KES ?? 130;
+  const localPrice = (usd: number) => localAmountFromUsd(usd, rate);
+
   async function poll(paymentId: string) {
     for (let attempt = 0; attempt < 60; attempt += 1) {
       if (cancelled.current) return;
@@ -78,17 +113,22 @@ export function BillingActions({
       const data = (await response.json().catch(() => ({}))) as { payment?: PaymentState; error?: string };
       if (!response.ok || !data.payment) {
         setError(data.error || "Could not check the payment status.");
+        setBusy("");
         return;
       }
       setPayment(data.payment);
       if (data.payment.status === "completed") {
-        setMessage(`Payment confirmed${data.payment.receipt ? ` · receipt ${data.payment.receipt}` : ""}. Your account has been updated.`);
+        setMessage(
+          `Payment confirmed${data.payment.receipt ? ` · reference ${data.payment.receipt}` : ""}. Your account has been updated.`,
+        );
+        setCheckoutUrl("");
         setBusy("");
         router.refresh();
         return;
       }
       if (data.payment.status === "failed" || data.payment.status === "cancelled") {
         setError(data.payment.failureReason || `Payment ${data.payment.status}. No credits were added.`);
+        setCheckoutUrl("");
         setBusy("");
         router.refresh();
         return;
@@ -103,27 +143,38 @@ export function BillingActions({
     setError("");
     setMessage("");
     setPayment(null);
+    setCheckoutUrl("");
     setBusy(kind === "plan" ? id : `pack:${id}`);
     try {
       const response = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(
-          kind === "plan" ? { kind, planId: id, phoneNumber: phone } : { kind, packageId: id, phoneNumber: phone },
-        ),
+        body: JSON.stringify({
+          kind,
+          gateway,
+          phoneNumber: phone,
+          ...(kind === "plan" ? { planId: id } : { packageId: id }),
+        }),
       });
-      const data = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        message?: string;
-        payment?: PaymentState;
-      };
+      const data = (await response.json().catch(() => ({}))) as CheckoutResponse;
       if (!response.ok || !data.payment) {
         setError(data.error || "Could not start the payment.");
         setBusy("");
         return;
       }
       setPayment(data.payment);
-      setMessage(data.message || "Check your phone and enter your M-Pesa PIN.");
+      if (data.redirectUrl) {
+        setCheckoutUrl(data.redirectUrl);
+        setMessage(
+          `${data.country ? `${data.country} · ` : ""}${data.currency ?? data.payment.currency} ${data.amountLocal ?? data.payment.amountLocal}. Complete the payment on the secure card checkout page, then return here.`,
+        );
+        window.location.assign(data.redirectUrl);
+      } else {
+        setMessage(
+          data.message ||
+            `${data.network ? `Check your ${data.network} phone prompt` : "Check your phone"} and approve the payment to continue.`,
+        );
+      }
       await poll(data.payment.id);
     } catch {
       setError("Network error. Check your connection and try again.");
@@ -180,7 +231,6 @@ export function BillingActions({
   }
 
   const currentPlan = plans.find((plan) => plan.id === currentPlanId) ?? null;
-  const phoneValid = /^(\+?254|0)?[17]\d{8}$/.test(phone.replace(/\s/g, ""));
 
   return (
     <div className="stack">
@@ -190,8 +240,17 @@ export function BillingActions({
         <div className="notice notice-info">
           <LoaderCircle className="spin" size={16} />
           <span>
-            Waiting for M-Pesa confirmation · {payment.reference} · {formatKes(payment.amountKes)}. Do not close this
-            page until the prompt is approved.
+            Waiting for gateway confirmation · {payment.reference} ·{" "}
+            {formatLocalMoney(payment.amountLocal, payment.currency)}. Credits are added only after verified payment.
+          </span>
+        </div>
+      ) : null}
+      {checkoutUrl ? (
+        <div className="notice notice-info">
+          <ExternalLink size={16} />
+          <span>
+            Card checkout opened in a new step. If it did not open,{" "}
+            <a href={checkoutUrl} target="_blank" rel="noreferrer">continue to secure checkout</a>.
           </span>
         </div>
       ) : null}
@@ -199,8 +258,8 @@ export function BillingActions({
         <div className="notice notice-warn">
           <AlertTriangle size={16} />
           <span>
-            Online payments are not enabled yet. An administrator must configure the Pay Xdigitex API key and webhook
-            secret before checkouts can run.
+            Online payments are not enabled yet. An administrator must configure the Pay Xdigitex API key before
+            checkouts can run.
           </span>
         </div>
       ) : null}
@@ -209,27 +268,46 @@ export function BillingActions({
         <div className="card-head">
           <div>
             <h3>Payment details</h3>
-            <p>M-Pesa STK push. You approve the charge on your phone.</p>
+            <p>Mobile money or card, processed by Pay Xdigitex.</p>
           </div>
           <span className="badge badge-muted">
-            <span className="dot" /> {formatKes(usdToKesRate)}
+            <span className="dot" /> {gateway === "card" ? "Card" : "Mobile money"}
           </span>
         </div>
         <div className="card-body">
+          <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+            <button
+              type="button"
+              className={`btn ${gateway === "mobile" ? "btn-primary" : "btn-secondary"}`}
+              style={{ flex: 1 }}
+              onClick={() => setGateway("mobile")}
+            >
+              <Smartphone size={15} /> Mobile money
+            </button>
+            <button
+              type="button"
+              className={`btn ${gateway === "card" ? "btn-primary" : "btn-secondary"}`}
+              style={{ flex: 1 }}
+              onClick={() => setGateway("card")}
+            >
+              <CreditCard size={15} /> Card
+            </button>
+          </div>
           <div className="field" style={{ marginBottom: 8 }}>
-            <label className="label" htmlFor="phone">M-Pesa phone number</label>
+            <label className="label" htmlFor="phone">Phone number (international format)</label>
             <input
               id="phone"
               className="input"
               inputMode="tel"
               autoComplete="tel"
-              placeholder="0712 345 678"
+              placeholder="+254712345678"
               value={phone}
               onChange={(event) => setPhone(event.target.value)}
             />
             <span className="hint">
-              Kenyan number starting 07 or 01. Prices are charged in KES at the configured rate of{" "}
-              {formatKes(usdToKesRate)} per $1.
+              {detected
+                ? `${detected.country} · ${detected.currency} · ${detected.networks.join(", ")}`
+                : "Country, network and currency are detected from your country code."}
             </span>
           </div>
         </div>
@@ -249,7 +327,7 @@ export function BillingActions({
               </div>
               <div className="price-tag">
                 <b>${plan.priceUsd.toFixed(0)}</b>
-                <span>/ month</span>
+                <span>/ month · {formatLocalMoney(localPrice(plan.priceUsd), currency)}</span>
               </div>
               <p className="muted small">{plan.description}</p>
               <ul className="price-list">
@@ -264,10 +342,10 @@ export function BillingActions({
                 <button
                   className={`btn ${isUpgrade || !currentPlan ? "btn-primary" : "btn-secondary"}`}
                   style={{ flex: 1 }}
-                  disabled={!gatewayConfigured || !phoneValid || busy !== "" || current}
+                  disabled={!gatewayConfigured || !detected || busy !== "" || current}
                   onClick={() => startCheckout("plan", plan.id)}
                 >
-                  {busyThis ? <LoaderCircle className="spin" size={15} /> : <Smartphone size={15} />}
+                  {busyThis ? <LoaderCircle className="spin" size={15} /> : gateway === "card" ? <CreditCard size={15} /> : <Smartphone size={15} />}
                   {current ? "Active plan" : renewalDue && current ? "Pay renewal" : isUpgrade ? "Upgrade now" : "Switch plan"}
                 </button>
                 {current && subscription && !subscription.cancelAtPeriodEnd ? (
@@ -330,21 +408,21 @@ export function BillingActions({
               >
                 <b>{(pack.credits + pack.bonus).toLocaleString()}</b>
                 <span>credits{pack.bonus ? ` · incl. ${pack.bonus} bonus` : ""}</span>
-                <strong>${pack.priceUsd.toFixed(2)}</strong>
+                <strong>{formatLocalMoney(localPrice(pack.priceUsd), currency)}</strong>
               </button>
             ))}
           </div>
           <button
             className="btn btn-primary btn-block mt-3"
-            disabled={!packId || !gatewayConfigured || !phoneValid || busy !== ""}
+            disabled={!packId || !gatewayConfigured || !detected || busy !== ""}
             onClick={() => startCheckout("topup", packId)}
           >
             {busy === `pack:${packId}` ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />}
-            Buy credits with M-Pesa
+            Buy credits with {gateway === "card" ? "card" : "mobile money"}
           </button>
           <p className="tiny muted mt-2">
-            Credits are added only after the gateway confirms the payment. A browser redirect is never treated as
-            proof of payment.
+            Credits are added only after the gateway verifies payment. A browser redirect is never treated as proof of
+            payment.
           </p>
         </div>
       </div>

@@ -6,7 +6,8 @@ import { listPlans, toPlanView, latestSubscription, refreshSubscription } from "
 import { listPayments, paymentView, PAYMENT_STATUS_LABEL } from "@/lib/server/payments/service";
 import { getPricingSettings } from "@/lib/server/settings";
 import { listLedger } from "@/lib/server/credits";
-import { formatCredits, formatDate, formatKes, formatUsdCents, relativeTime } from "@/lib/format";
+import { formatCredits, formatDate, formatUsdCents, relativeTime } from "@/lib/format";
+import { formatLocalMoney, PAYMENT_COUNTRIES, rateForCurrency } from "@/lib/payment-countries";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,11 @@ export default async function BillingPage() {
     priceUsd: pack.price_cents / 100,
   }));
   const gatewayConfigured = Boolean(env.XDIGITEX_PAY_API_KEY);
-  const webhookConfigured = Boolean(env.XDIGITEX_WEBHOOK_SECRET);
+  const kesRate = settings.usd_to_kes_rate_micros / 1_000_000;
+  const currencyRates: Record<string, number> = { USD: 1 };
+  for (const country of PAYMENT_COUNTRIES) {
+    currencyRates[country.currency] = rateForCurrency(country.currency, kesRate);
+  }
   const renewalDue = subscription?.status === "past_due";
 
   return (
@@ -74,8 +79,8 @@ export default async function BillingPage() {
           <div className="page-eyebrow">BILLING</div>
           <h1 className="page-title">Billing &amp; credits</h1>
           <p className="page-sub">
-            Manage your plan, top up credits and review every payment. Charges are processed by Pay Xdigitex
-            (M-Pesa) and activated only after server-side verification.
+            Manage your plan, top up credits and review every payment. Mobile money and card charges are processed by
+            Pay Xdigitex and activated only after server-side verification.
           </p>
         </div>
       </div>
@@ -107,16 +112,6 @@ export default async function BillingPage() {
         </div>
       </div>
 
-      {!webhookConfigured ? (
-        <div className="notice notice-warn mb-3">
-          <Receipt size={16} />
-          <span>
-            The payment webhook secret is not configured. Payments will still be verified by polling, but webhook
-            confirmation should be configured before going live.
-          </span>
-        </div>
-      ) : null}
-
       <div className="split">
         <BillingActions
           plans={planLites}
@@ -133,7 +128,7 @@ export default async function BillingPage() {
               : null
           }
           gatewayConfigured={gatewayConfigured}
-          usdToKesRate={settings.usd_to_kes_rate_micros / 1_000_000}
+          currencyRates={currencyRates}
           renewalDue={renewalDue}
         />
 
@@ -165,7 +160,7 @@ export default async function BillingPage() {
                         </span>
                       </span>
                       <span className="history-amount">
-                        <div>{formatKes(view.amountKes)}</div>
+                        <div>{formatLocalMoney(view.amountLocal, view.currency)}</div>
                         <div className="tiny muted">{formatUsdCents(Math.round(view.priceUsd * 100))}</div>
                         <div className="mt-1">{statusBadge(view.status)}</div>
                       </span>

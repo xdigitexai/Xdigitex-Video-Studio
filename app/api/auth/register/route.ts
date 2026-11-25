@@ -40,10 +40,6 @@ export async function POST(request: Request) {
       email,
       password: String(body.password ?? ""),
       displayName,
-      adminEmails: (env.ADMIN_EMAILS || "")
-        .split(",")
-        .map((value) => value.trim().toLowerCase())
-        .filter(Boolean),
       emailVerificationRequired: verificationRequired,
     });
 

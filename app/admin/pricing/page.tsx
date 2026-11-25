@@ -12,7 +12,7 @@ export default async function AdminPricingPage({
 }: {
   searchParams?: Promise<Record<string, unknown>> | Record<string, unknown>;
 }) {
-  const frame = await loadAdminFrame("/admin/pricing");
+  const frame = await loadAdminFrame("/admin/pricing", "pricing.read");
   const raw = await Promise.resolve(searchParams ?? {});
   const preselectedUserId = typeof raw.userId === "string" ? raw.userId : undefined;
   const [settings, overrides, users, plans, providers, models] = await Promise.all([

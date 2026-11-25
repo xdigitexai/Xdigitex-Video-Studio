@@ -1,8 +1,9 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import type { Actor } from "./auth-types";
-import { isAdminRole, isSuperAdminRole, resolveActor } from "./auth";
-import { dbFromRequestEnv, adminEmails, platformAuthEnabled, runtimeEnv, type RuntimeEnv } from "./runtime";
+import { isSuperAdminRole, resolveActor } from "./auth";
+import { dbFromRequestEnv, platformAuthEnabled, runtimeEnv, type RuntimeEnv } from "./runtime";
+import { adminPermissionForRequest, assertAdminPermission, type AdminPermission } from "./admin-access";
 import type { Db } from "./db";
 import { ApiError, assertSameOrigin, clientIp, enforceRateLimit, userAgent } from "./http";
 import { recordAudit } from "./audit";
@@ -16,7 +17,6 @@ export interface RequestContext {
 export function authConfig(env: RuntimeEnv = runtimeEnv()) {
   return {
     platformAuthEnabled: platformAuthEnabled(env),
-    adminEmails: adminEmails(env),
     sessionDays: 30,
   };
 }
@@ -39,16 +39,18 @@ export async function requireUser(request: Request): Promise<RequestContext & { 
   return { ...context, actor: context.actor };
 }
 
-export async function requireAdmin(request: Request): Promise<RequestContext & { actor: Actor }> {
+export async function requireAdmin(
+  request: Request,
+  permission: AdminPermission = adminPermissionForRequest(request),
+): Promise<RequestContext & { actor: Actor }> {
   const context = await requireUser(request);
-  if (!isAdminRole(context.actor.user.role)) {
-    throw new ApiError(403, "Administrator access is required.", "FORBIDDEN");
-  }
+  await assertAdminPermission(context.db, context.actor, permission);
   return context;
 }
 
 export async function requireSuperAdmin(request: Request): Promise<RequestContext & { actor: Actor }> {
   const context = await requireUser(request);
+  await assertAdminPermission(context.db, context.actor, "admin.access");
   if (!isSuperAdminRole(context.actor.user.role)) {
     throw new ApiError(403, "Super administrator access is required.", "FORBIDDEN");
   }
@@ -105,8 +107,15 @@ export async function optionalPageActor(): Promise<Actor | null> {
   return resolveActor(db, new Headers(headerList), authConfig());
 }
 
-export async function pageAdmin(returnTo: string): Promise<Actor> {
+export async function pageAdmin(
+  returnTo: string,
+  permission: AdminPermission = "admin.access",
+): Promise<Actor> {
   const actor = await pageActor(returnTo);
-  if (!isAdminRole(actor.user.role)) redirect("/dashboard?error=forbidden");
-  return actor;
+  const db = dbFromRequestEnv();
+  try {
+    return await assertAdminPermission(db, actor, permission);
+  } catch {
+    redirect("/dashboard?error=forbidden");
+  }
 }

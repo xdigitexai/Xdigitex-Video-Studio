@@ -1,26 +1,29 @@
 /**
- * Pay Xdigitex client.
+ * Pay Xdigitex client for https://pay.xdigitex.space.
  *
- * Contract taken from the official documentation at https://pay.xdigitex.com/docs:
- *  - Base URL: https://pay.xdigitex.com (configurable)
- *  - Auth: X-API-Key
- *  - POST /api/payments/stkpush  { phoneNumber, amount, accountReference, transactionDesc }
- *  - GET  /api/payments/status/:checkoutRequestId
- *  - Webhook: X-Webhook-Event, X-Webhook-Timestamp,
- *             X-Webhook-Signature: sha256=<hex HMAC-SHA256 of the raw body>
- * The documented currency is KES (M-Pesa); amounts are whole KES.
+ * Contract from https://pay.xdigitex.space/docs:
+ *  - Base URL: https://pay.xdigitex.space/api
+ *  - Auth: X-API-Key (server-side only, never sent to the browser)
+ *  - POST /payments/initiate  -> { reference, redirect_url?, message?, ... }
+ *  - GET  /payments/{reference}/status -> { reference, status, amount, currency, ... }
+ *  - Webhook events: payment.completed / payment.failed
+ *
+ * Only `card` and `mobile` gateways are allowed. `crypto` is intentionally not
+ * exposed. Webhook payloads are never trusted for fulfillment: the reference is
+ * re-checked with the authenticated status endpoint before credits are granted.
  */
 
+import { detectPaymentNumber, type PaymentGateway } from "../../payment-countries";
 import { hmacSha256Hex, verifyHmacSha256 } from "../crypto";
 
 export interface XdigitexConfig {
   apiKey: string;
   baseUrl?: string;
   webhookSecret?: string;
-  sandbox?: boolean;
 }
 
-export const DEFAULT_PAY_BASE_URL = "https://pay.xdigitex.com";
+export const DEFAULT_PAY_BASE_URL = "https://pay.xdigitex.space/api";
+export const ALLOWED_GATEWAYS: readonly PaymentGateway[] = ["card", "mobile"];
 
 export class PaymentGatewayError extends Error {
   status: number;
@@ -39,56 +42,105 @@ function baseUrl(config: XdigitexConfig): string {
   return (config.baseUrl || DEFAULT_PAY_BASE_URL).replace(/\/+$/, "");
 }
 
-/** Normalises Kenyan mobile numbers to 2547XXXXXXXX / 2541XXXXXXXX. */
+function parsePayload(text: string): Record<string, unknown> {
+  if (!text) return {};
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { message: text.slice(0, 400) };
+  }
+}
+
+function gatewayMessage(payload: Record<string, unknown>, status: number): string {
+  const value =
+    (typeof payload.message === "string" && payload.message) ||
+    (typeof payload.error === "string" && payload.error) ||
+    (typeof payload.detail === "string" && payload.detail);
+  return value || `Payment gateway rejected the request (${status}).`;
+}
+
+/** Normalises any supported international number to `+dialCodeNationalNumber`. */
+export function normaliseInternationalPhone(input: string): string | null {
+  return detectPaymentNumber(input)?.internationalNumber ?? null;
+}
+
+/** Backwards-compatible Kenya-only helper retained for older callers/tests. */
 export function normaliseKenyanPhone(input: string): string | null {
-  const digits = String(input || "").replace(/\D/g, "");
-  if (/^254(7|1)\d{8}$/.test(digits)) return digits;
-  if (/^0(7|1)\d{8}$/.test(digits)) return `254${digits.slice(1)}`;
-  if (/^(7|1)\d{8}$/.test(digits)) return `254${digits}`;
-  return null;
+  const detected = detectPaymentNumber(input);
+  if (!detected || detected.dialCode !== "+254") return null;
+  return detected.internationalNumber.slice(1);
 }
 
-export interface StkPushInput {
-  phoneNumber: string;
-  amountKes: number;
-  accountReference: string;
-  transactionDesc: string;
-  tenantCode?: string;
+export interface InitiatePaymentInput {
+  gateway: PaymentGateway;
+  amount: number;
+  currency: string;
+  phone: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  description: string;
+  callbackUrl?: string;
+  webhookUrl?: string;
+  referenceHint?: string;
 }
 
-export interface StkPushResult {
-  checkoutRequestId: string;
+export interface InitiatePaymentResult {
+  reference: string;
+  gateway: PaymentGateway;
+  amount: number;
+  currency: string;
+  redirectUrl: string | null;
+  message: string | null;
   raw: Record<string, unknown>;
 }
 
-export async function initiateStkPush(
+export async function initiatePayment(
   config: XdigitexConfig,
-  input: StkPushInput,
-): Promise<StkPushResult> {
+  input: InitiatePaymentInput,
+): Promise<InitiatePaymentResult> {
   if (!config.apiKey) {
     throw new PaymentGatewayError(503, "Payment gateway is not configured.", "", "PAYMENT_NOT_CONFIGURED");
   }
-  const phone = normaliseKenyanPhone(input.phoneNumber);
+  if (!ALLOWED_GATEWAYS.includes(input.gateway)) {
+    throw new PaymentGatewayError(400, "Choose mobile money or card payment.", "", "INVALID_GATEWAY");
+  }
+  const phone = normaliseInternationalPhone(input.phone);
   if (!phone) {
-    throw new PaymentGatewayError(400, "Enter a valid Kenyan M-Pesa number (07XX XXX XXX).", "", "INVALID_PHONE");
+    throw new PaymentGatewayError(
+      400,
+      "Enter a valid phone number with country code, e.g. +254712345678.",
+      "",
+      "INVALID_PHONE",
+    );
   }
-  if (!Number.isInteger(input.amountKes) || input.amountKes < 1) {
-    throw new PaymentGatewayError(400, "Payment amount must be at least 1 KES.", "", "INVALID_AMOUNT");
+  if (!Number.isInteger(input.amount) || input.amount < 1) {
+    throw new PaymentGatewayError(400, "Payment amount must be at least 1 unit.", "", "INVALID_AMOUNT");
   }
+  if (!/^[A-Z]{3}$/.test(input.currency)) {
+    throw new PaymentGatewayError(400, "Invalid payment currency.", "", "INVALID_CURRENCY");
+  }
+
   let response: Response;
   try {
-    response = await fetch(`${baseUrl(config)}/api/payments/stkpush`, {
+    response = await fetch(`${baseUrl(config)}/payments/initiate`, {
       method: "POST",
       headers: {
         "X-API-Key": config.apiKey,
         "content-type": "application/json",
+        accept: "application/json",
       },
       body: JSON.stringify({
-        phoneNumber: phone,
-        amount: input.amountKes,
-        accountReference: input.accountReference,
-        transactionDesc: input.transactionDesc,
-        ...(input.tenantCode ? { tenantCode: input.tenantCode } : {}),
+        amount: input.amount,
+        currency: input.currency,
+        gateway: input.gateway,
+        email: input.email || undefined,
+        phone,
+        first_name: input.firstName || undefined,
+        last_name: input.lastName || undefined,
+        description: input.description.slice(0, 120),
+        callback_url: input.callbackUrl || undefined,
+        webhook_url: input.webhookUrl || undefined,
       }),
       signal: AbortSignal.timeout(30_000),
     });
@@ -100,65 +152,88 @@ export async function initiateStkPush(
       "PAYMENT_UNREACHABLE",
     );
   }
-  const text = await response.text();
-  let payload: Record<string, unknown> = {};
-  try {
-    payload = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    payload = { message: text.slice(0, 400) };
-  }
+
+  const payload = parsePayload(await response.text());
   if (!response.ok) {
-    const message =
-      (typeof payload.message === "string" && payload.message) ||
-      (typeof payload.error === "string" && payload.error) ||
-      `Payment gateway rejected the request (${response.status}).`;
     throw new PaymentGatewayError(
       response.status === 401 || response.status === 403 ? 502 : response.status,
-      message,
+      gatewayMessage(payload, response.status),
       JSON.stringify(payload).slice(0, 500),
       typeof payload.error === "string" ? payload.error : "PAYMENT_REJECTED",
     );
   }
-  const checkoutRequestId =
-    (typeof payload.checkoutRequestId === "string" && payload.checkoutRequestId) ||
-    (typeof payload.CheckoutRequestID === "string" && payload.CheckoutRequestID) ||
+  const reference =
+    (typeof payload.reference === "string" && payload.reference) ||
+    (typeof payload.transaction_reference === "string" && payload.transaction_reference) ||
     "";
-  if (!checkoutRequestId) {
+  if (!reference) {
     throw new PaymentGatewayError(
       502,
-      "The payment gateway did not return a checkout reference.",
+      "The payment gateway did not return a reference.",
       JSON.stringify(payload).slice(0, 500),
       "PAYMENT_BAD_RESPONSE",
     );
   }
-  return { checkoutRequestId, raw: payload };
+  const redirectUrl =
+    typeof payload.redirect_url === "string" && payload.redirect_url.startsWith("https://")
+      ? payload.redirect_url
+      : null;
+  if (input.gateway === "card" && !redirectUrl) {
+    throw new PaymentGatewayError(
+      502,
+      "The card gateway did not return a secure checkout URL.",
+      JSON.stringify(payload).slice(0, 500),
+      "PAYMENT_BAD_RESPONSE",
+    );
+  }
+  return {
+    reference,
+    gateway: input.gateway,
+    amount: typeof payload.amount === "number" ? payload.amount : input.amount,
+    currency: typeof payload.currency === "string" ? payload.currency : input.currency,
+    redirectUrl,
+    message: typeof payload.message === "string" ? payload.message : null,
+    raw: payload,
+  };
 }
 
-export type GatewayPaymentStatus = "pending" | "completed" | "failed" | "cancelled";
+export type GatewayPaymentStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
 
 export interface GatewayStatusResult {
+  reference: string;
   status: GatewayPaymentStatus;
+  amount: number | null;
+  currency: string | null;
+  gateway: string | null;
   receipt: string | null;
-  amountKes: number | null;
   raw: Record<string, unknown>;
+}
+
+function normaliseStatus(value: unknown): GatewayPaymentStatus {
+  const status = String(value ?? "").toLowerCase();
+  if (status === "completed" || status === "success" || status === "succeeded") return "completed";
+  if (status === "failed" || status === "rejected") return "failed";
+  if (status === "cancelled" || status === "canceled") return "cancelled";
+  if (status === "processing" || status === "pending") return status;
+  return "pending";
 }
 
 export async function fetchPaymentStatus(
   config: XdigitexConfig,
-  checkoutRequestId: string,
+  reference: string,
 ): Promise<GatewayStatusResult> {
   if (!config.apiKey) {
     throw new PaymentGatewayError(503, "Payment gateway is not configured.", "", "PAYMENT_NOT_CONFIGURED");
   }
+  if (!reference || !/^[A-Za-z0-9_-]{4,120}$/.test(reference)) {
+    throw new PaymentGatewayError(400, "Invalid payment reference.", "", "INVALID_REFERENCE");
+  }
   let response: Response;
   try {
-    response = await fetch(
-      `${baseUrl(config)}/api/payments/status/${encodeURIComponent(checkoutRequestId)}`,
-      {
-        headers: { "X-API-Key": config.apiKey },
-        signal: AbortSignal.timeout(20_000),
-      },
-    );
+    response = await fetch(`${baseUrl(config)}/payments/${encodeURIComponent(reference)}/status`, {
+      headers: { "X-API-Key": config.apiKey, accept: "application/json" },
+      signal: AbortSignal.timeout(20_000),
+    });
   } catch (error) {
     throw new PaymentGatewayError(
       504,
@@ -167,42 +242,57 @@ export async function fetchPaymentStatus(
       "PAYMENT_UNREACHABLE",
     );
   }
-  const text = await response.text();
-  let payload: Record<string, unknown> = {};
-  try {
-    payload = text ? (JSON.parse(text) as Record<string, unknown>) : {};
-  } catch {
-    payload = { message: text.slice(0, 400) };
-  }
+  const payload = parsePayload(await response.text());
   if (!response.ok) {
     throw new PaymentGatewayError(
       response.status,
-      typeof payload.message === "string" ? payload.message : `Status check failed (${response.status}).`,
-      JSON.stringify(payload).slice(0, 400),
+      gatewayMessage(payload, response.status),
+      JSON.stringify(payload).slice(0, 500),
       "PAYMENT_STATUS_FAILED",
     );
   }
-  const rawStatus = String(payload.status ?? "").toLowerCase();
-  const status: GatewayPaymentStatus =
-    rawStatus === "completed" || rawStatus === "success" || rawStatus === "succeeded"
-      ? "completed"
-      : rawStatus === "failed"
-        ? "failed"
-        : rawStatus === "cancelled" || rawStatus === "canceled"
-          ? "cancelled"
-          : "pending";
-  const receipt =
-    (typeof payload.mpesaReceiptNumber === "string" && payload.mpesaReceiptNumber) ||
-    (typeof payload.mpesa_receipt_number === "string" && payload.mpesa_receipt_number) ||
-    null;
   const amountRaw = payload.amount;
-  const amountKes = amountRaw === undefined || amountRaw === null ? null : Number(amountRaw);
+  const amount = amountRaw === undefined || amountRaw === null ? null : Number(amountRaw);
+  const receipt =
+    (typeof payload.receipt === "string" && payload.receipt) ||
+    (typeof payload.transaction_id === "string" && payload.transaction_id) ||
+    (typeof payload.mpesaReceiptNumber === "string" && payload.mpesaReceiptNumber) ||
+    null;
   return {
-    status,
+    reference: typeof payload.reference === "string" ? payload.reference : reference,
+    status: normaliseStatus(payload.status),
+    amount: Number.isFinite(amount) ? amount : null,
+    currency: typeof payload.currency === "string" ? payload.currency.toUpperCase() : null,
+    gateway: typeof payload.gateway === "string" ? payload.gateway.toLowerCase() : null,
     receipt,
-    amountKes: Number.isFinite(amountKes) ? amountKes : null,
     raw: payload,
   };
+}
+
+/**
+ * Verifies a webhook claim against the gateway itself. A forged POST cannot
+ * complete a payment because the server re-reads the authoritative status.
+ */
+export async function verifyGatewaySettlement(
+  config: XdigitexConfig,
+  reference: string,
+  expectedAmount: number,
+  expectedCurrency: string,
+): Promise<GatewayStatusResult> {
+  const status = await fetchPaymentStatus(config, reference);
+  if (status.status === "completed") {
+    const amountMismatch = status.amount !== null && Math.abs(status.amount - expectedAmount) >= 1;
+    const currencyMismatch = status.currency !== null && status.currency !== expectedCurrency;
+    if (amountMismatch || currencyMismatch) {
+      throw new PaymentGatewayError(
+        409,
+        "Gateway settlement does not match the payment record.",
+        JSON.stringify({ expectedAmount, expectedCurrency, gateway: status }),
+        "PAYMENT_MISMATCH",
+      );
+    }
+  }
+  return status;
 }
 
 export async function verifyWebhookSignature(
@@ -222,13 +312,11 @@ export function paymentGatewayConfig(env: {
   XDIGITEX_PAY_API_KEY?: string;
   XDIGITEX_PAY_BASE_URL?: string;
   XDIGITEX_WEBHOOK_SECRET?: string;
-  XDIGITEX_PAY_SANDBOX?: string;
 }): XdigitexConfig | null {
   if (!env.XDIGITEX_PAY_API_KEY) return null;
   return {
     apiKey: env.XDIGITEX_PAY_API_KEY,
-    baseUrl: env.XDIGITEX_PAY_BASE_URL,
+    baseUrl: env.XDIGITEX_PAY_BASE_URL || DEFAULT_PAY_BASE_URL,
     webhookSecret: env.XDIGITEX_WEBHOOK_SECRET,
-    sandbox: env.XDIGITEX_PAY_SANDBOX === "true",
   };
 }

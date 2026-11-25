@@ -46,7 +46,6 @@ export interface RegisterInput {
   email: string;
   password: string;
   displayName?: string;
-  adminEmails?: string[];
   emailVerificationRequired?: boolean;
   signupCredits?: number;
 }
@@ -67,7 +66,8 @@ export async function registerAccount(db: Db, input: RegisterInput): Promise<Reg
   }
   const timestamp = now();
   const id = newId("usr");
-  const role: Role = (input.adminEmails ?? []).includes(emailNormalized) ? "super_admin" : "customer";
+  // Public registration can never create a privileged account.
+  const role: Role = "customer";
   const displayName = (input.displayName || emailNormalized.split("@")[0]).trim().slice(0, 80) || "Creator";
   const passwordHash = await hashPassword(input.password);
   const verified = input.emailVerificationRequired === false;

@@ -25,7 +25,7 @@ function hasEnvironmentKey(code: string, env: RuntimeEnv): boolean {
 }
 
 export default async function AdminProvidersPage() {
-  const frame = await loadAdminFrame("/admin/providers");
+  const frame = await loadAdminFrame("/admin/providers", "providers.read");
   const providers = await listProviders(frame.db);
   const rows: AdminProvider[] = [];
   for (const provider of providers) {

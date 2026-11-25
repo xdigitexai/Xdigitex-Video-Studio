@@ -12,7 +12,7 @@ export default async function AdminUsersPage({
 }: {
   searchParams?: Promise<Record<string, unknown>> | Record<string, unknown>;
 }) {
-  const frame = await loadAdminFrame("/admin/users");
+  const frame = await loadAdminFrame("/admin/users", "users.read");
   const raw = await Promise.resolve(searchParams ?? {});
   const search = typeof raw.search === "string" ? raw.search : "";
   const customers = await listCustomers(frame.db, { search: search || undefined, limit: 200 });

@@ -77,8 +77,10 @@ export async function listSessions(db: Db, userId: string): Promise<Array<{ id: 
 
 async function actorFromSessionToken(db: Db, token: string): Promise<{ actor: Actor; sessionId: string } | null> {
   const id = await sha256Hex(token);
-  const row = await db.first<UserRow & { session_id: string; session_expires: number; last_seen_at: number }>(
-    `SELECT u.*, s.id AS session_id, s.expires_at AS session_expires, s.last_seen_at
+  const row = await db.first<
+    UserRow & { session_id: string; session_expires: number; last_seen_at: number; mfa_verified_at: number | null }
+  >(
+    `SELECT u.*, s.id AS session_id, s.expires_at AS session_expires, s.last_seen_at, s.mfa_verified_at
      FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.id = ? LIMIT 1`,
     [id],
@@ -93,7 +95,15 @@ async function actorFromSessionToken(db: Db, token: string): Promise<{ actor: Ac
   if (Date.now() - row.last_seen_at > 3_600_000) {
     await db.run(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`, [Date.now(), id]);
   }
-  return { actor: { user: row, via: "session" }, sessionId: id };
+  return {
+    actor: {
+      user: row,
+      via: "session",
+      sessionId: row.session_id,
+      mfaVerified: row.mfa_verified_at !== null,
+    },
+    sessionId: id,
+  };
 }
 
 /**
@@ -142,7 +152,7 @@ export async function resolveActor(
         ? safeDecode(encodedName)
         : null;
     const timestamp = Date.now();
-    const role: Role = config.adminEmails.includes(emailNormalized) ? "super_admin" : "customer";
+    const role: Role = "customer";
     const id = `usr_${crypto.randomUUID().replace(/-/g, "")}`;
     await db.run(
       `INSERT INTO users (id, email, email_normalized, password_hash, display_name, role, status, email_verified_at, legacy_owner_id, last_login_at, created_at, updated_at)

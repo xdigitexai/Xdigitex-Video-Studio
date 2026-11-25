@@ -1,8 +1,7 @@
-import type { Role, UserRow } from "@/lib/server/auth-types";
+import type { UserRow } from "@/lib/server/auth-types";
 import { createSession } from "@/lib/server/auth";
 import { auditRequest, contextFromRequest, guardMutation } from "@/lib/server/context";
 import { ApiError, clientIp, errorResponse, json, readJson, userAgent } from "@/lib/server/http";
-import { adminEmails } from "@/lib/server/runtime";
 import { publicUser, sessionCookieHeader } from "@/lib/server/session";
 import { normalizeEmail } from "@/lib/server/util";
 
@@ -65,7 +64,7 @@ export async function POST(request: Request) {
 
     if (!user) {
       const id = `usr_${crypto.randomUUID().replace(/-/g, "")}`;
-      const role: Role = adminEmails(env).includes(emailNormalized) ? "super_admin" : "customer";
+      const role = "customer" as const;
       const displayName = String(claims.name || emailNormalized.split("@")[0]).slice(0, 80) || "Creator";
       await db.batch([
         {

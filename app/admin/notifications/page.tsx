@@ -7,7 +7,7 @@ import { loadAdminFrame, shellUser } from "@/lib/server/frame";
 export const dynamic = "force-dynamic";
 
 export default async function AdminNotificationsPage() {
-  const frame = await loadAdminFrame("/admin/notifications");
+  const frame = await loadAdminFrame("/admin/notifications", "notifications.read");
   const customers = await listCustomers(frame.db, { limit: 200 });
 
   return (

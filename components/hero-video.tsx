@@ -24,8 +24,9 @@ export function HeroVideo() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const maybeContext = canvas.getContext("2d");
+    if (!maybeContext) return;
+    const context: CanvasRenderingContext2D = maybeContext;
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let width = 0;
@@ -40,7 +41,7 @@ export function HeroVideo() {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = Math.max(1, Math.floor(width * dpr));
       canvas.height = Math.max(1, Math.floor(height * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
     const observer = new ResizeObserver(resize);
@@ -55,104 +56,104 @@ export function HeroVideo() {
 
       const t = reduced ? 0 : now - startRef.current;
       const horizon = height * 0.55;
-      ctx.clearRect(0, 0, width, height);
+      context.clearRect(0, 0, width, height);
 
-      const sky = ctx.createLinearGradient(0, 0, 0, height);
+      const sky = context.createLinearGradient(0, 0, 0, height);
       sky.addColorStop(0, "#07071c");
       sky.addColorStop(0.35, "#241552");
       sky.addColorStop(0.62, "#7b3b5a");
       sky.addColorStop(1, "#0b1029");
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, width, height);
+      context.fillStyle = sky;
+      context.fillRect(0, 0, width, height);
 
       const glowX = width * 0.22 + Math.sin(t / 2600) * width * 0.07;
-      const glow = ctx.createRadialGradient(glowX, height * 0.16, 0, glowX, height * 0.16, width * 0.62);
+      const glow = context.createRadialGradient(glowX, height * 0.16, 0, glowX, height * 0.16, width * 0.62);
       glow.addColorStop(0, "rgba(139,92,246,0.42)");
       glow.addColorStop(0.45, "rgba(34,211,238,0.12)");
       glow.addColorStop(1, "rgba(34,211,238,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, width, height);
+      context.fillStyle = glow;
+      context.fillRect(0, 0, width, height);
 
       const sunX = width * 0.62 + Math.sin(t / 3400) * width * 0.025;
       const sunY = height * 0.36 + Math.cos(t / 4100) * height * 0.012;
       const sunR = Math.min(width, height) * 0.15;
-      const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 3.4);
+      const halo = context.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 3.4);
       halo.addColorStop(0, "rgba(255,214,170,0.78)");
       halo.addColorStop(0.28, "rgba(255,138,110,0.32)");
       halo.addColorStop(1, "rgba(255,138,110,0)");
-      ctx.fillStyle = halo;
-      ctx.fillRect(0, 0, width, height);
+      context.fillStyle = halo;
+      context.fillRect(0, 0, width, height);
 
-      const sun = ctx.createRadialGradient(sunX - sunR * 0.3, sunY - sunR * 0.3, 0, sunX, sunY, sunR);
+      const sun = context.createRadialGradient(sunX - sunR * 0.3, sunY - sunR * 0.3, 0, sunX, sunY, sunR);
       sun.addColorStop(0, "#fff4d6");
       sun.addColorStop(0.55, "#ffc98b");
       sun.addColorStop(1, "rgba(255,150,100,0.35)");
-      ctx.beginPath();
-      ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
-      ctx.fillStyle = sun;
-      ctx.fill();
+      context.beginPath();
+      context.arc(sunX, sunY, sunR, 0, Math.PI * 2);
+      context.fillStyle = sun;
+      context.fill();
 
-      const sea = ctx.createLinearGradient(0, horizon, 0, height);
+      const sea = context.createLinearGradient(0, horizon, 0, height);
       sea.addColorStop(0, "rgba(28,26,76,0.72)");
       sea.addColorStop(0.5, "rgba(10,16,46,0.96)");
       sea.addColorStop(1, "#050714");
-      ctx.fillStyle = sea;
-      ctx.fillRect(0, horizon, width, height - horizon);
+      context.fillStyle = sea;
+      context.fillRect(0, horizon, width, height - horizon);
 
       for (let layer = 0; layer < 4; layer += 1) {
         const base = horizon + (height - horizon) * (0.08 + layer * 0.19);
         const amp = height * (0.016 + layer * 0.008);
         const speed = 0.00032 + layer * 0.00011;
-        ctx.beginPath();
-        ctx.moveTo(0, height);
+        context.beginPath();
+        context.moveTo(0, height);
         for (let x = 0; x <= width + 12; x += 12) {
           const p = x / width;
           const y =
             base +
             Math.sin(p * Math.PI * (2.3 + layer * 0.55) + t * speed + layer) * amp +
             Math.sin(p * Math.PI * 7.5 - t * speed * 0.72) * amp * 0.34;
-          ctx.lineTo(x, y);
+          context.lineTo(x, y);
         }
-        ctx.lineTo(width, height);
-        ctx.closePath();
-        ctx.fillStyle = `rgba(${8 + layer * 4},${12 + layer * 5},${38 + layer * 8},${0.72 - layer * 0.08})`;
-        ctx.fill();
+        context.lineTo(width, height);
+        context.closePath();
+        context.fillStyle = `rgba(${8 + layer * 4},${12 + layer * 5},${38 + layer * 8},${0.72 - layer * 0.08})`;
+        context.fill();
       }
 
-      ctx.save();
-      ctx.globalCompositeOperation = "screen";
+      context.save();
+      context.globalCompositeOperation = "screen";
       for (let i = 0; i < 26; i += 1) {
         const k = i / 26;
         const y = horizon + Math.pow(k, 1.35) * (height - horizon) * 0.78;
         const span = (1 - k) * width * 0.24 + 6;
         const jitter = Math.sin(t * 0.0022 + i * 1.7) * span * 0.3;
-        ctx.fillStyle = `rgba(255,190,140,${0.3 * (1 - k)})`;
-        ctx.fillRect(sunX - span / 2 + jitter, y, span, 1.3);
+        context.fillStyle = `rgba(255,190,140,${0.3 * (1 - k)})`;
+        context.fillRect(sunX - span / 2 + jitter, y, span, 1.3);
       }
 
       for (const particle of PARTICLES) {
         const py = (particle.seed - t * particle.speed + 1) % 1;
         const px = (particle.seed * 7.31 + Math.sin(t / 2400 + particle.seed * 9) * 0.035) % 1;
-        ctx.fillStyle = `rgba(200,230,255,${particle.alpha})`;
-        ctx.beginPath();
-        ctx.arc(((px + 1) % 1) * width, py * height, particle.size, 0, Math.PI * 2);
-        ctx.fill();
+        context.fillStyle = `rgba(200,230,255,${particle.alpha})`;
+        context.beginPath();
+        context.arc(((px + 1) % 1) * width, py * height, particle.size, 0, Math.PI * 2);
+        context.fill();
       }
 
       const sweepX = ((t / 9000) % 1) * width * 1.5 - width * 0.25;
-      const sweep = ctx.createLinearGradient(sweepX - 130, 0, sweepX + 130, 0);
+      const sweep = context.createLinearGradient(sweepX - 130, 0, sweepX + 130, 0);
       sweep.addColorStop(0, "rgba(255,255,255,0)");
       sweep.addColorStop(0.5, "rgba(255,255,255,0.07)");
       sweep.addColorStop(1, "rgba(255,255,255,0)");
-      ctx.fillStyle = sweep;
-      ctx.fillRect(0, 0, width, height);
-      ctx.restore();
+      context.fillStyle = sweep;
+      context.fillRect(0, 0, width, height);
+      context.restore();
 
-      const vignette = ctx.createRadialGradient(width / 2, height / 2, height * 0.18, width / 2, height / 2, height * 0.9);
+      const vignette = context.createRadialGradient(width / 2, height / 2, height * 0.18, width / 2, height / 2, height * 0.9);
       vignette.addColorStop(0, "rgba(0,0,0,0)");
       vignette.addColorStop(1, "rgba(0,0,0,0.58)");
-      ctx.fillStyle = vignette;
-      ctx.fillRect(0, 0, width, height);
+      context.fillStyle = vignette;
+      context.fillRect(0, 0, width, height);
 
       const progress = (t % LOOP_MS) / LOOP_MS;
       if (fillRef.current) fillRef.current.style.width = `${progress * 100}%`;

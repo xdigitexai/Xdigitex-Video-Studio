@@ -17,7 +17,7 @@ export default async function AdminUserDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const frame = await loadAdminFrame(`/admin/users/${id}`);
+  const frame = await loadAdminFrame(`/admin/users/${id}`, "users.read");
   const [detail, entitlements, plans] = await Promise.all([
     customerDetail(frame.db, id),
     getEntitlements(frame.db, id),

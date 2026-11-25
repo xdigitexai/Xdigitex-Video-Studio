@@ -6,7 +6,8 @@ import { loadAdminFrame, shellUser } from "@/lib/server/frame";
 import { filtersFromSearchParams, resolveSearchParams } from "@/lib/server/admin";
 import { listPayments, paymentView, PAYMENT_STATUS_LABEL } from "@/lib/server/payments/service";
 import { normalizeEmail } from "@/lib/server/util";
-import { formatDateTime, formatKes, formatUsdCents } from "@/lib/format";
+import { formatDateTime, formatUsdCents } from "@/lib/format";
+import { formatLocalMoney } from "@/lib/payment-countries";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function AdminPaymentsPage({
 }: {
   searchParams?: Promise<Record<string, unknown>> | Record<string, unknown>;
 }) {
-  const frame = await loadAdminFrame("/admin/payments");
+  const frame = await loadAdminFrame("/admin/payments", "payments.read");
   const { db } = frame;
   const params = await resolveSearchParams(searchParams);
   const filters = filtersFromSearchParams(params);
@@ -133,7 +134,7 @@ export default async function AdminPaymentsPage({
                   <td className="tiny">{users[index]?.email ?? payment.user_id}</td>
                   <td className="tiny">{payment.purpose.replace(/_/g, " ")}</td>
                   <td className="num">
-                    {formatKes(view.amountKes)}
+                    {formatLocalMoney(view.amountLocal, view.currency)}
                     <div className="tiny muted">{formatUsdCents(Math.round(view.priceUsd * 100))}</div>
                   </td>
                   <td className="num">{payment.credits}</td>
